@@ -3,11 +3,13 @@ import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, LogOut, Package, Calendar as CalendarIcon, User } from 'lucide-react';
 import Resources from './Resources';
 import Bookings from './Bookings';
+import Overview from './Overview';
 import BookingForm from '../components/booking/BookingForm';
+import NotificationBell from '../components/notifications/NotificationBell';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState('resources');
+  const [activeTab, setActiveTab] = useState('overview');
   const [selectedResource, setSelectedResource] = useState(null);
 
   const handleBookingSuccess = () => {
@@ -27,6 +29,12 @@ const Dashboard = () => {
             </h1>
             
             <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+              <button 
+                onClick={() => setActiveTab('overview')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'overview' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Overview
+              </button>
               <button 
                 onClick={() => setActiveTab('resources')}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'resources' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}`}
@@ -49,6 +57,7 @@ const Dashboard = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
               <User className="w-4 h-4 text-gray-400" />
               <span className="text-sm text-gray-600 font-medium">{user?.name}</span>
@@ -68,11 +77,11 @@ const Dashboard = () => {
       </nav>
 
       <main className="max-w-7xl mx-auto">
-        {activeTab === 'resources' ? (
+        {activeTab === 'overview' && <Overview />}
+        {activeTab === 'resources' && (
           <Resources onBook={(resource) => setSelectedResource(resource)} />
-        ) : (
-          <Bookings />
         )}
+        {activeTab === 'bookings' && <Bookings />}
       </main>
 
       {/* Booking Modal */}
