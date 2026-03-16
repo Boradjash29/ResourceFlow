@@ -1,54 +1,49 @@
-import { query } from '../config/db.js';
-import { checkConflict } from '../utils/conflictDetection.js';
+import prisma from '../config/prisma.js';
 import { getSuggestions } from '../utils/smartSuggestions.js';
+import { createBookingInternal } from '../services/bookingService.js';
 
 export const getAllBookings = async (req, res) => {
   const { role, id: userId } = req.user;
   const { resource_id, start_date, end_date, status } = req.query;
 
   try {
-    let queryText = `
-      SELECT b.*, u.name as user_name, u.email as user_email, r.name as resource_name, r.type as resource_type 
-      FROM bookings b
-      JOIN users u ON b.user_id = u.id
-      JOIN resources r ON b.resource_id = r.id
-      WHERE 1=1
-    `;
-    const params = [];
-    let paramIndex = 1;
-
-    // Filter by role: Admin sees all, Others see restricted view (handled in PRD: Employee sees own details + others busy)
-    // For MVP/Phase 2, let's allow fetching by user_id for "My Bookings"
+    const where = {};
+    
+    // Admins see all by default unless filtered, others only see their own
     if (role !== 'admin') {
-      // If not admin, restrict to own bookings OR filter by resource availability
-      // But usually 'getAllBookings' is for the dashboard/calendar.
-      // Let's implement basic filtering first.
+      where.user_id = userId;
     }
 
-    if (userId && role !== 'admin') {
-      queryText += ` AND b.user_id = $${paramIndex++}`;
-      params.push(userId);
-    }
-
-    if (resource_id) {
-      queryText += ` AND b.resource_id = $${paramIndex++}`;
-      params.push(resource_id);
-    }
-
+    if (resource_id) where.resource_id = resource_id;
+    
     if (start_date && end_date) {
-      queryText += ` AND b.start_time >= $${paramIndex++} AND b.end_time <= $${paramIndex++}`;
-      params.push(start_date, end_date);
+      where.AND = [
+        { start_time: { lt: new Date(end_date) } },
+        { end_time: { gt: new Date(start_date) } }
+      ];
     }
 
-    if (status) {
-      queryText += ` AND b.status = $${paramIndex++}`;
-      params.push(status);
-    }
+    if (status) where.status = status;
 
-    queryText += ' ORDER BY b.start_time ASC';
+    const bookings = await prisma.booking.findMany({
+      where,
+      include: {
+        user: { select: { name: true, email: true } },
+        resource: { select: { name: true, type: true } }
+      },
+      orderBy: { start_time: 'asc' }
+    });
 
-    const result = await query(queryText, params);
-    res.status(200).json({ bookings: result.rows, count: result.rows.length });
+    // Flatten for frontend compatibility
+    const flattenedBookings = bookings.map(b => ({
+      ...b,
+      user_name: b.user?.name,
+      user_email: b.user?.email,
+      resource_name: b.resource?.name,
+      resource_type: b.resource?.type
+    }));
+
+    res.status(200).json({ bookings: flattenedBookings, count: flattenedBookings.length });
   } catch (error) {
     console.error('Error fetching bookings:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -60,38 +55,30 @@ export const createBooking = async (req, res) => {
   const userId = req.user.id;
 
   try {
-    // 1. Validate resource exists and is available
-    const resourceResult = await query('SELECT * FROM resources WHERE id = $1', [resource_id]);
-    if (resourceResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Resource not found' });
-    }
-    if (resourceResult.rows[0].status === 'unavailable') {
-      return res.status(400).json({ message: 'Resource is currently unavailable' });
-    }
+    const booking = await createBookingInternal({
+      user_id: userId,
+      resource_id,
+      start_time,
+      end_time,
+      meeting_title,
+      description,
+      participants
+    });
 
-    // 2. Check for conflicts
-    const conflict = await checkConflict(resource_id, start_time, end_time);
-    if (conflict) {
+    res.status(201).json({ message: 'Booking created successfully', booking });
+  } catch (error) {
+    console.error('Error creating booking:', error);
+    
+    if (error.status === 409) {
       const suggestions = await getSuggestions(resource_id, start_time, end_time);
-      return res.status(409).json({ 
-        error: 'Time slot not available', 
-        conflict,
+      return res.status(error.status).json({ 
+        error: error.message, 
+        conflict: error.conflict,
         suggestions 
       });
     }
 
-    // 3. Create booking
-    const status = 'confirmed'; // TODO: Logic for 'pending' if resource requires approval
-    const result = await query(
-      `INSERT INTO bookings (user_id, resource_id, start_time, end_time, meeting_title, description, participants, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [userId, resource_id, start_time, end_time, meeting_title, description, JSON.stringify(participants), status]
-    );
-
-    res.status(201).json({ message: 'Booking created successfully', booking: result.rows[0] });
-  } catch (error) {
-    console.error('Error creating booking:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(error.status || 500).json({ message: error.message || 'Internal server error' });
   }
 };
 
@@ -101,17 +88,26 @@ export const cancelBooking = async (req, res) => {
   const role = req.user.role;
 
   try {
-    const booking = await query('SELECT * FROM bookings WHERE id = $1', [id]);
-    if (booking.rows.length === 0) {
+    const booking = await prisma.booking.findUnique({
+      where: { id }
+    });
+
+    if (!booking) {
       return res.status(404).json({ message: 'Booking not found' });
     }
 
-    // Only owner or admin can cancel
-    if (booking.rows[0].user_id !== userId && role !== 'admin') {
+    if (booking.user_id !== userId && role !== 'admin') {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    await query("UPDATE bookings SET status = 'cancelled', updated_at = NOW() WHERE id = $1", [id]);
+    await prisma.booking.update({
+      where: { id },
+      data: { 
+        status: 'cancelled',
+        updated_at: new Date()
+      }
+    });
+
     res.status(200).json({ message: 'Booking cancelled successfully' });
   } catch (error) {
     console.error('Error cancelling booking:', error);

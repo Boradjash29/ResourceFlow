@@ -1,13 +1,14 @@
-import { query } from '../config/db.js';
+import prisma from '../config/prisma.js';
 
 export const getNotifications = async (req, res) => {
   const userId = req.user.id;
   try {
-    const result = await query(
-      'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20',
-      [userId]
-    );
-    res.status(200).json(result.rows);
+    const notifications = await prisma.notification.findMany({
+      where: { user_id: userId },
+      orderBy: { created_at: 'desc' },
+      take: 20
+    });
+    res.status(200).json(notifications);
   } catch (error) {
     console.error('Error fetching notifications:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -18,10 +19,10 @@ export const markAsRead = async (req, res) => {
   const { id } = req.params;
   const userId = req.user.id;
   try {
-    await query(
-      'UPDATE notifications SET is_read = TRUE WHERE id = $1 AND user_id = $2',
-      [id, userId]
-    );
+    await prisma.notification.updateMany({
+      where: { id, user_id: userId },
+      data: { is_read: true }
+    });
     res.status(200).json({ message: 'Notification marked as read' });
   } catch (error) {
     console.error('Error marking notification as read:', error);
@@ -32,7 +33,9 @@ export const markAsRead = async (req, res) => {
 export const clearAllNotifications = async (req, res) => {
   const userId = req.user.id;
   try {
-    await query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+    await prisma.notification.deleteMany({
+      where: { user_id: userId }
+    });
     res.status(200).json({ message: 'Notifications cleared' });
   } catch (error) {
     console.error('Error clearing notifications:', error);

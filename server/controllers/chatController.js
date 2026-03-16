@@ -1,5 +1,7 @@
+import prisma from '../config/prisma.js';
 import { getAIResponse } from '../lib/ai.js';
 import { findRelevantResources, syncAllResources } from '../services/embeddingService.js';
+import { createBookingInternal } from '../services/bookingService.js';
 
 export const handleAssistantChat = async (req, res) => {
   const { messages } = req.body;
@@ -7,15 +9,46 @@ export const handleAssistantChat = async (req, res) => {
 
   try {
     // 1. RAG: Search for relevant resources
-    const relevantResources = await findRelevantResources(userText);
+    let relevantResources = await findRelevantResources(userText);
+    
+    // Fallback: If query is very short or no relevant found, get generic available resources
+    if (relevantResources.length === 0 || userText.length < 5) {
+      const topResources = await prisma.resource.findMany({
+        where: { status: 'available' },
+        take: 3
+      });
+      relevantResources = topResources;
+    }
     
     // 2. Build Context
-    const context = relevantResources
-      .map(r => `[RES_ID: ${r.id}] ${r.name} (${r.type}): ${r.location}, Status: ${r.status}`)
-      .join('\n');
+    const context = relevantResources.length > 0 
+      ? relevantResources
+        .map(r => `[RES_ID: ${r.id}] ${r.name} (${r.type}): ${r.location}, Status: ${r.status}`)
+        .join('\n')
+      : "The system currently has no resources listed as available.";
 
-    // 3. Get LLM response
-    const aiText = await getAIResponse(messages, context);
+    // 3. Get LLM response with role awareness
+    let aiText = await getAIResponse(messages, context, req.user.role);
+
+    // 4. Intercept [BOOK_ACTION]
+    const actionMatch = aiText.match(/\[BOOK_ACTION:\s*({.*?})\]/);
+    if (actionMatch) {
+      try {
+        const actionData = JSON.parse(actionMatch[1]);
+        const booking = await createBookingInternal({
+          user_id: req.user.id,
+          ...actionData
+        });
+
+        // Clean up the tag and add confirmation
+        aiText = aiText.replace(actionMatch[0], '').trim();
+        aiText += `\n\n✅ Done! I've booked ${booking.resource.name} for you. (${booking.start_time.toLocaleString()} - ${booking.end_time.toLocaleTimeString()})`;
+      } catch (err) {
+        console.error('AI Booking Interception Failed:', err);
+        aiText = aiText.replace(actionMatch[0], '').trim();
+        aiText += `\n\n❌ Sorry, I tried to book that for you but ran into an error: ${err.message || 'Unknown error'}.`;
+      }
+    }
 
     res.status(200).json({
       message: aiText,

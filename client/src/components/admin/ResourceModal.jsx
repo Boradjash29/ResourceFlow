@@ -50,9 +50,13 @@ const ResourceModal = ({ resource, onClose, onSave }) => {
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               >
                 <option value="meeting_room">Meeting Room</option>
+                <option value="conference_hall">Conference Hall</option>
+                <option value="projector">Projector</option>
+                <option value="laptop">Laptop</option>
                 <option value="equipment">Equipment</option>
                 <option value="parking">Parking Space</option>
                 <option value="desk">Work Desk</option>
+                <option value="other">Other</option>
               </select>
             </div>
           </div>

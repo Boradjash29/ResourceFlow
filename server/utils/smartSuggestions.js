@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import prisma from '../config/prisma.js';
 
 /**
  * Finds alternative slots when a conflict occurs.
@@ -6,39 +6,52 @@ import { query } from '../config/db.js';
 export const getSuggestions = async (resource_id, start_time, end_time) => {
   const suggestions = [];
   
-  // 1. Find next available slot on the same resource (within 7 days)
-  const nextSlotResult = await query(
-    `SELECT end_time FROM bookings 
-     WHERE resource_id = $1 AND status != 'cancelled' AND end_time >= $2
-     ORDER BY end_time ASC LIMIT 1`,
-    [resource_id, end_time]
-  );
+  // 1. Find next available slot on the same resource
+  const nextSlot = await prisma.booking.findFirst({
+    where: {
+      resource_id,
+      status: { not: 'cancelled' },
+      end_time: { gte: new Date(end_time) }
+    },
+    orderBy: { end_time: 'asc' },
+    select: { end_time: true }
+  });
   
-  if (nextSlotResult.rows.length > 0) {
+  if (nextSlot) {
     suggestions.push({
       resource_id,
-      start_time: nextSlotResult.rows[0].end_time,
+      start_time: nextSlot.end_time,
       reason: 'Same resource, next available slot'
     });
   }
 
   // 2. Find similar resources (same type) available at requested time
-  const resourceResult = await query('SELECT type FROM resources WHERE id = $1', [resource_id]);
-  if (resourceResult.rows.length > 0) {
-    const type = resourceResult.rows[0].type;
-    const alternatives = await query(
-      `SELECT r.id, r.name FROM resources r
-       WHERE r.type = $1 AND r.id != $2 AND r.status = 'available'
-       AND NOT EXISTS (
-         SELECT 1 FROM bookings b 
-         WHERE b.resource_id = r.id AND b.status != 'cancelled'
-         AND (b.start_time < $4 AND b.end_time > $3)
-       )
-       LIMIT 2`,
-      [type, resource_id, start_time, end_time]
-    );
+  const resource = await prisma.resource.findUnique({
+    where: { id: resource_id },
+    select: { type: true }
+  });
 
-    alternatives.rows.forEach(res => {
+  if (resource) {
+    const alternatives = await prisma.resource.findMany({
+      where: {
+        type: resource.type,
+        id: { not: resource_id },
+        status: 'available',
+        bookings: {
+          none: {
+            status: { not: 'cancelled' },
+            AND: [
+              { start_time: { lt: new Date(end_time) } },
+              { end_time: { gt: new Date(start_time) } }
+            ]
+          }
+        }
+      },
+      take: 2,
+      select: { id: true, name: true }
+    });
+
+    alternatives.forEach(res => {
       suggestions.push({
         resource_id: res.id,
         resource_name: res.name,

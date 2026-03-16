@@ -13,7 +13,7 @@ import {
 const UtilizationChart = ({ data }) => {
   return (
     <div className="card h-[400px]">
-      <h3 className="text-lg font-bold text-gray-900 mb-6">Booking Activity (Last 7 Days)</h3>
+      <h3 className="text-lg font-bold text-gray-900 mb-6">Recent & Upcoming Activity</h3>
       <div className="h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data}>
@@ -36,7 +36,7 @@ const UtilizationChart = ({ data }) => {
             />
             <Bar dataKey="count" radius={[4, 4, 0, 0]}>
               {data.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={index === data.length - 1 ? '#3B82F6' : '#93C5FD'} />
+                <Cell key={`cell-${index}`} fill={index === 3 ? '#3B82F6' : '#93C5FD'} />
               ))}
             </Bar>
           </BarChart>

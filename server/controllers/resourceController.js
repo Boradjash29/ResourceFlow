@@ -1,38 +1,43 @@
-import { query } from '../config/db.js';
+import prisma from '../config/prisma.js';
 
 export const getAllResources = async (req, res) => {
-  const { type, status, capacity_min, search } = req.query;
+  const { type, status, capacity_min, search, page = 1, limit = 10 } = req.query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const take = parseInt(limit);
   
   try {
-    let queryText = 'SELECT * FROM resources WHERE 1=1';
-    const params = [];
-    let paramIndex = 1;
-
-    if (type) {
-      queryText += ` AND type = $${paramIndex++}`;
-      params.push(type);
-    }
-
-    if (status) {
-      queryText += ` AND status = $${paramIndex++}`;
-      params.push(status);
-    }
-
-    if (capacity_min) {
-      queryText += ` AND capacity >= $${paramIndex++}`;
-      params.push(capacity_min);
-    }
-
+    const where = {};
+    
+    if (type) where.type = type;
+    if (status) where.status = status;
+    if (capacity_min) where.capacity = { gte: parseInt(capacity_min) };
+    
     if (search) {
-      queryText += ` AND (name ILIKE $${paramIndex} OR location ILIKE $${paramIndex})`;
-      params.push(`%${search}%`);
-      paramIndex++;
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { location: { contains: search, mode: 'insensitive' } }
+      ];
     }
 
-    queryText += ' ORDER BY created_at DESC';
+    const [resources, total] = await Promise.all([
+      prisma.resource.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { created_at: 'desc' }
+      }),
+      prisma.resource.count({ where })
+    ]);
 
-    const result = await query(queryText, params);
-    res.status(200).json({ resources: result.rows, count: result.rows.length });
+    res.status(200).json({ 
+      resources, 
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / take)
+      }
+    });
   } catch (error) {
     console.error('Error fetching resources:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -42,11 +47,14 @@ export const getAllResources = async (req, res) => {
 export const getResourceById = async (req, res) => {
   const { id } = req.params;
   try {
-    const result = await query('SELECT * FROM resources WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const resource = await prisma.resource.findUnique({
+      where: { id }
+    });
+    
+    if (!resource) {
       return res.status(404).json({ message: 'Resource not found' });
     }
-    res.status(200).json(result.rows[0]);
+    res.status(200).json(resource);
   } catch (error) {
     console.error('Error fetching resource:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -54,21 +62,30 @@ export const getResourceById = async (req, res) => {
 };
 
 export const createResource = async (req, res) => {
-  const { name, type, capacity, location, status = 'available', image_url } = req.body;
+  const { name, type, capacity, location, status = 'available', image_url, description } = req.body;
 
   try {
-    // Check for unique name
-    const existing = await query('SELECT * FROM resources WHERE name = $1', [name]);
-    if (existing.rows.length > 0) {
+    const existing = await prisma.resource.findUnique({
+      where: { name }
+    });
+    
+    if (existing) {
       return res.status(409).json({ message: 'Resource name already exists' });
     }
 
-    const result = await query(
-      'INSERT INTO resources (name, type, capacity, location, status, image_url) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
-      [name, type, capacity, location, status, image_url]
-    );
+    const resource = await prisma.resource.create({
+      data: {
+        name,
+        type,
+        capacity: parseInt(capacity) || 0,
+        location,
+        status,
+        image_url,
+        description
+      }
+    });
 
-    res.status(201).json({ message: 'Resource created successfully', resource: result.rows[0] });
+    res.status(201).json({ message: 'Resource created successfully', resource });
   } catch (error) {
     console.error('Error creating resource:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -77,37 +94,41 @@ export const createResource = async (req, res) => {
 
 export const updateResource = async (req, res) => {
   const { id } = req.params;
-  const { name, type, capacity, location, status, image_url } = req.body;
+  const { name, type, capacity, location, status, image_url, description } = req.body;
 
   try {
-    // Check existence
-    const existing = await query('SELECT * FROM resources WHERE id = $1', [id]);
-    if (existing.rows.length === 0) {
+    const existing = await prisma.resource.findUnique({
+      where: { id }
+    });
+    
+    if (!existing) {
       return res.status(404).json({ message: 'Resource not found' });
     }
 
-    // Check name uniqueness if changed
-    if (name && name !== existing.rows[0].name) {
-      const nameCheck = await query('SELECT * FROM resources WHERE name = $1', [name]);
-      if (nameCheck.rows.length > 0) {
+    if (name && name !== existing.name) {
+      const nameCheck = await prisma.resource.findUnique({
+        where: { name }
+      });
+      if (nameCheck) {
         return res.status(409).json({ message: 'Resource name already exists' });
       }
     }
 
-    const result = await query(
-      `UPDATE resources 
-       SET name = COALESCE($1, name), 
-           type = COALESCE($2, type), 
-           capacity = COALESCE($3, capacity), 
-           location = COALESCE($4, location), 
-           status = COALESCE($5, status), 
-           image_url = COALESCE($6, image_url),
-           updated_at = NOW()
-       WHERE id = $7 RETURNING *`,
-      [name, type, capacity, location, status, image_url, id]
-    );
+    const resource = await prisma.resource.update({
+      where: { id },
+      data: {
+        name,
+        type,
+        capacity: capacity ? parseInt(capacity) : undefined,
+        location,
+        status,
+        image_url,
+        description,
+        updated_at: new Date()
+      }
+    });
 
-    res.status(200).json({ message: 'Resource updated successfully', resource: result.rows[0] });
+    res.status(200).json({ message: 'Resource updated successfully', resource });
   } catch (error) {
     console.error('Error updating resource:', error);
     res.status(500).json({ message: 'Internal server error' });
@@ -119,20 +140,25 @@ export const deleteResource = async (req, res) => {
   const { force = false } = req.query;
 
   try {
-    // Check if resource has future bookings
-    const bookings = await query(
-      "SELECT * FROM bookings WHERE resource_id = $1 AND status != 'cancelled' AND end_time > NOW()",
-      [id]
-    );
+    const bookings = await prisma.booking.findMany({
+      where: {
+        resource_id: id,
+        status: { not: 'cancelled' },
+        end_time: { gt: new Date() }
+      }
+    });
 
-    if (bookings.rows.length > 0 && !force) {
+    if (bookings.length > 0 && force !== 'true') {
       return res.status(409).json({ 
         message: 'Resource has future bookings. Cancel them first or use force flag.',
-        pending_bookings: bookings.rows.length 
+        pending_bookings: bookings.length 
       });
     }
 
-    await query('DELETE FROM resources WHERE id = $1', [id]);
+    await prisma.resource.delete({
+      where: { id }
+    });
+    
     res.status(200).json({ message: 'Resource deleted successfully' });
   } catch (error) {
     console.error('Error deleting resource:', error);

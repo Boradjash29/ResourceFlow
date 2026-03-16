@@ -1,38 +1,57 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { query } from '../config/db.js';
+import prisma from '../config/prisma.js';
 
 export const register = async (req, res) => {
-  const { name, email, password, role = 'employee' } = req.body;
+  const { name, email, password } = req.body;
+  const role = 'employee'; // Hardcoded for security as discussed
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ message: 'Name, email and password are required' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+  }
 
   try {
-    // Check if user exists
-    const userExist = await query('SELECT * FROM users WHERE email = $1', [email]);
-    if (userExist.rows.length > 0) {
-      return res.status(409).json({ message: 'User already exists' });
+    const existingUser = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'Email already exists' });
     }
 
-    // Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create user
-    const newUser = await query(
-      'INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role',
-      [name, email, passwordHash, role]
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password_hash: passwordHash,
+        role
+      }
+    });
+
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: process.env.JWT_EXPIRY || '24h' }
     );
 
-    // Generate JWT
-    const token = jwt.sign(
-      { id: newUser.rows[0].id, role: newUser.rows[0].role },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRY }
-    );
+    // Set cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
 
     res.status(201).json({
       message: 'User registered successfully',
-      user: newUser.rows[0],
-      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -44,44 +63,57 @@ export const login = async (req, res) => {
   const { email, password } = req.body;
 
   try {
-    // Find user
-    const userResult = await query('SELECT * FROM users WHERE email = $1', [email]);
-    const user = userResult.rows[0];
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
 
     if (!user) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Check status
-    if (user.status === 'inactive') {
-      return res.status(403).json({ message: 'Account deactivated' });
-    }
-
-    // Verify password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Generate JWT
     const token = jwt.sign(
       { id: user.id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRY }
+      { expiresIn: process.env.JWT_EXPIRY || '24h' }
     );
+
+    // Set cookie
+    res.cookie('token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    });
 
     res.status(200).json({
       message: 'Login successful',
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-      token,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role }
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
+};
+
+export const getCurrentUser = async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, name: true, email: true, role: true }
+    });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.status(200).json({ user });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching user' });
+  }
+};
+
+export const logout = (req, res) => {
+  res.clearCookie('token');
+  res.status(200).json({ message: 'Logged out successfully' });
 };

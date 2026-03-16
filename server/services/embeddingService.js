@@ -1,4 +1,4 @@
-import { query } from '../config/db.js';
+import prisma from '../config/prisma.js';
 import { generateEmbedding } from '../lib/ai.js';
 
 /**
@@ -6,9 +6,9 @@ import { generateEmbedding } from '../lib/ai.js';
  */
 export const syncAllResources = async () => {
   try {
-    const resources = await query('SELECT * FROM resources');
+    const resources = await prisma.resource.findMany();
     
-    for (const res of resources.rows) {
+    const syncPromises = resources.map(async (res) => {
       const description = `
         Resource: ${res.name}
         Type: ${res.type.replace('_', ' ')}
@@ -21,16 +21,17 @@ export const syncAllResources = async () => {
       const embedding = await generateEmbedding(description);
       const vectorValue = `[${embedding.join(',')}]`;
 
-      await query(
-        `INSERT INTO embeddings (resource_id, embedding_vector, content)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (resource_id) 
-         DO UPDATE SET embedding_vector = $2, content = $3, updated_at = NOW()`,
-        [res.id, vectorValue, description]
-      );
-    }
+      // Using raw SQL for the vector insert as Prisma doesn't natively support pgvector types in its DSL
+      return prisma.$executeRaw`
+        INSERT INTO embeddings (resource_id, embedding_vector, content)
+        VALUES (${res.id}::uuid, ${vectorValue}::vector, ${description})
+        ON CONFLICT (resource_id) 
+        DO UPDATE SET embedding_vector = ${vectorValue}::vector, content = ${description}, updated_at = NOW()
+      `;
+    });
 
-    return resources.rows.length;
+    await Promise.all(syncPromises);
+    return resources.length;
   } catch (error) {
     console.error('Vector Sync Error:', error);
     throw error;
@@ -45,16 +46,16 @@ export const findRelevantResources = async (userQuery, limit = 3) => {
     const embedding = await generateEmbedding(userQuery);
     const vectorValue = `[${embedding.join(',')}]`;
 
-    const result = await query(
-      `SELECT r.*, e.content, (e.embedding_vector <=> $1) as distance
-       FROM resources r
-       JOIN embeddings e ON r.id = e.resource_id
-       ORDER BY distance ASC
-       LIMIT $2`,
-      [vectorValue, limit]
-    );
+    // Cosine distance similarity search using raw SQL
+    const results = await prisma.$queryRaw`
+      SELECT r.*, e.content, (e.embedding_vector <=> ${vectorValue}::vector) as distance
+      FROM resources r
+      JOIN embeddings e ON r.id = e.resource_id
+      ORDER BY distance ASC
+      LIMIT ${limit}
+    `;
 
-    return result.rows;
+    return results;
   } catch (error) {
     console.error('Vector Search Error:', error);
     throw error;

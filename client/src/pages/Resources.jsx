@@ -10,15 +10,24 @@ const Resources = ({ onBook }) => {
     type: '',
     search: '',
   });
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(filters.search);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [filters.search]);
 
   const fetchResources = async () => {
     setLoading(true);
     try {
-      const { type, search } = filters;
+      const { type } = filters;
       let url = '/resources';
       const params = new URLSearchParams();
       if (type) params.append('type', type);
-      if (search) params.append('search', search);
+      if (debouncedSearch) params.append('search', debouncedSearch);
       
       const response = await api.get(`${url}?${params.toString()}`);
       setResources(response.data.resources);
@@ -30,7 +39,7 @@ const Resources = ({ onBook }) => {
 
   useEffect(() => {
     fetchResources();
-  }, [filters.type]);
+  }, [filters.type, debouncedSearch]);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -77,6 +86,10 @@ const Resources = ({ onBook }) => {
               <option value="conference_hall">Conference Halls</option>
               <option value="projector">Projectors</option>
               <option value="laptop">Laptops</option>
+              <option value="equipment">Equipment</option>
+              <option value="parking">Parking Spaces</option>
+              <option value="desk">Work Desks</option>
+              <option value="other">Other</option>
             </select>
           </div>
         </div>

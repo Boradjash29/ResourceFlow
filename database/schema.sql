@@ -54,15 +54,26 @@ CREATE INDEX IF NOT EXISTS idx_bookings_time ON bookings(start_time, end_time);
 CREATE INDEX IF NOT EXISTS idx_bookings_conflict ON bookings(resource_id, start_time, end_time) WHERE status != 'cancelled';
 
 -- Embeddings table
+DROP TABLE IF EXISTS embeddings CASCADE;
 CREATE TABLE IF NOT EXISTS embeddings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  resource_id UUID NOT NULL REFERENCES resources(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
-  embedding vector(768),
+  embedding_vector vector(1536),
   metadata JSONB,
-  created_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(resource_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON embeddings USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON embeddings USING hnsw (embedding_vector vector_cosine_ops);
+
+-- Booking overlap prevention
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS no_overlap;
+ALTER TABLE bookings ADD CONSTRAINT no_overlap 
+EXCLUDE USING gist (resource_id WITH =, tsrange(start_time, end_time) WITH &&)
+WHERE (status != 'cancelled');
 
 -- Notifications table
 CREATE TABLE IF NOT EXISTS notifications (
