@@ -1,52 +1,88 @@
-import React from 'react';
-import { useAuth } from './context/AuthContext';
-import { LayoutDashboard, LogOut } from 'lucide-react';
+import React, { useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { LayoutDashboard, LogOut, Package, Calendar as CalendarIcon, User } from 'lucide-react';
+import Resources from './Resources';
+import Bookings from './Bookings';
+import BookingForm from '../components/booking/BookingForm';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState('resources');
+  const [selectedResource, setSelectedResource] = useState(null);
+
+  const handleBookingSuccess = () => {
+    setSelectedResource(null);
+    setActiveTab('bookings');
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <LayoutDashboard className="text-primary" />
-            ResourceFlow
-          </h1>
+      {/* Sidebar / Top Nav */}
+      <nav className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+          <div className="flex items-center gap-8">
+            <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <LayoutDashboard className="text-primary" />
+              ResourceFlow
+            </h1>
+            
+            <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+              <button 
+                onClick={() => setActiveTab('resources')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'resources' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <Package className="w-4 h-4" />
+                  Resources
+                </div>
+              </button>
+              <button 
+                onClick={() => setActiveTab('bookings')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'bookings' ? 'bg-white shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <CalendarIcon className="w-4 h-4" />
+                  My Bookings
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Welcome, <strong>{user?.name}</strong></span>
+            <div className="flex items-center gap-2 px-3 py-1 bg-gray-50 rounded-full border border-gray-100">
+              <User className="w-4 h-4 text-gray-400" />
+              <span className="text-sm text-gray-600 font-medium">{user?.name}</span>
+              <span className="text-[10px] uppercase bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                {user?.role}
+              </span>
+            </div>
             <button 
               onClick={logout}
-              className="btn btn-secondary flex items-center gap-2 text-sm"
+              className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+              title="Sign Out"
             >
-              <LogOut className="w-4 h-4" />
-              Sign Out
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="card col-span-2">
-            <h2 className="text-lg font-semibold mb-4">Dashboard Overview</h2>
-            <p className="text-gray-600">Welcome to ResourceFlow. This is a placeholder dashboard. In Phase 2, we will implement the resource and booking system.</p>
-          </div>
-          <div className="card">
-            <h2 className="text-lg font-semibold mb-4">Quick Stats</h2>
-            <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <span className="text-sm text-blue-700">Total Bookings</span>
-                <span className="font-bold text-blue-700">0</span>
-              </div>
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="text-sm text-green-700">Available Rooms</span>
-                <span className="font-bold text-green-700">0</span>
-              </div>
-            </div>
-          </div>
-        </div>
+      <main className="max-w-7xl mx-auto">
+        {activeTab === 'resources' ? (
+          <Resources onBook={(resource) => setSelectedResource(resource)} />
+        ) : (
+          <Bookings />
+        )}
       </main>
+
+      {/* Booking Modal */}
+      {selectedResource && (
+        <BookingForm 
+          resource={selectedResource} 
+          onClose={() => setSelectedResource(null)}
+          onSuccess={handleBookingSuccess}
+        />
+      )}
     </div>
   );
 };
