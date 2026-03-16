@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, LogOut, Package, Calendar as CalendarIcon, User } from 'lucide-react';
+import { LayoutDashboard, LogOut, Package, Calendar as CalendarIcon, User, Settings, ShieldAlert } from 'lucide-react';
 import Resources from './Resources';
 import Bookings from './Bookings';
 import Overview from './Overview';
+import AdminResources from './admin/AdminResources';
+import AuditLogs from './admin/AuditLogs';
 import BookingForm from '../components/booking/BookingForm';
 import NotificationBell from '../components/notifications/NotificationBell';
 import ChatWidget from '../components/chat/ChatWidget';
@@ -12,6 +14,8 @@ const Dashboard = () => {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedResource, setSelectedResource] = useState(null);
+
+  const isAdmin = user?.role === 'admin';
 
   const handleBookingSuccess = () => {
     setSelectedResource(null);
@@ -54,6 +58,29 @@ const Dashboard = () => {
                   My Bookings
                 </div>
               </button>
+
+              {isAdmin && (
+                <>
+                  <button 
+                    onClick={() => setActiveTab('manage-resources')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'manage-resources' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Settings className="w-4 h-4" />
+                      Manage Resources
+                    </div>
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('audit-logs')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'audit-logs' ? 'bg-white shadow-sm text-red-600' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4" />
+                      Audit Logs
+                    </div>
+                  </button>
+                </>
+              )}
             </div>
           </div>
 
@@ -83,9 +110,16 @@ const Dashboard = () => {
           <Resources onBook={(resource) => setSelectedResource(resource)} />
         )}
         {activeTab === 'bookings' && <Bookings />}
+        {activeTab === 'manage-resources' && isAdmin && <AdminResources />}
+        {activeTab === 'audit-logs' && isAdmin && <AuditLogs />}
       </main>
 
       {/* Booking Modal */}
+      {selectedResource && (
+        <BookingForm 
+          resource={selectedResource} 
+          onClose={() => setSelectedResource(null)}
+          onSuccess={handleBookingSuccess}
         />
       )}
 
