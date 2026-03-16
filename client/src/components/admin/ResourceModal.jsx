@@ -106,6 +106,17 @@ const ResourceModal = ({ resource, onClose, onSave }) => {
             />
           </div>
 
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-gray-700 ml-1">Image URL</label>
+            <input 
+              type="url"
+              className="input-field"
+              value={formData.image_url || ''}
+              onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
+              placeholder="https://example.com/image.jpg"
+            />
+          </div>
+
           <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
             <button 
               type="button" 

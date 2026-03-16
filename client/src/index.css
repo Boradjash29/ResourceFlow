@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,26 +6,43 @@
 
 @layer base {
   body {
-    @apply font-sans bg-gray-50 text-gray-900;
+    @apply font-sans bg-brand-bg text-[#1B2559] antialiased transition-colors duration-300 dark:bg-zinc-950 dark:text-white leading-relaxed;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display tracking-tight;
   }
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 active:scale-95;
+    @apply px-6 py-2.5 rounded-2xl font-semibold transition-all duration-300 active:scale-95 text-sm flex items-center gap-2;
   }
   .btn-primary {
-    @apply bg-primary text-white hover:bg-primary-dark shadow-sm;
+    @apply bg-brand-blue text-white hover:shadow-premium shadow-soft dark:shadow-none;
   }
   .btn-secondary {
-    @apply bg-white border border-gray-200 text-gray-700 hover:bg-gray-50;
+    @apply bg-white border border-gray-100 text-brand-lavender hover:bg-gray-50 dark:bg-white/5 dark:border-white/5 dark:text-white dark:hover:bg-white/10;
   }
   
   .input-field {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all;
+    @apply w-full px-4 py-3 border border-gray-100 bg-white rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-zinc-600 text-sm dark:bg-zinc-950 dark:border-white/5 dark:text-white;
   }
   
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply bg-white rounded-3xl shadow-soft border border-white p-7 transition-all duration-300 dark:bg-zinc-900 dark:border-white/5 dark:shadow-none;
+    @apply hover:shadow-premium;
+  }
+
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 rounded-3xl shadow-soft dark:bg-zinc-900/80 dark:border-white/10;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 font-medium text-brand-lavender hover:bg-brand-bg hover:text-brand-blue dark:hover:bg-zinc-900;
+  }
+
+  .sidebar-link-active {
+    @apply bg-brand-bg text-brand-blue shadow-none font-bold dark:bg-zinc-900 dark:text-brand-blue;
   }
 }

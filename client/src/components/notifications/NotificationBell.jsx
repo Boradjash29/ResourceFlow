@@ -53,7 +53,7 @@ const NotificationBell = () => {
     <div className="relative" ref={dropdownRef}>
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors relative"
+        className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-900 rounded-lg text-gray-500 transition-colors relative"
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
@@ -71,10 +71,10 @@ const NotificationBell = () => {
               initial={{ opacity: 0, y: 10, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
-              className="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-gray-100 z-50 overflow-hidden"
+              className="absolute right-0 mt-2 w-80 bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-gray-100 dark:border-white/10 z-50 overflow-hidden"
             >
-              <div className="px-4 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-                <span className="text-sm font-bold text-gray-900">Notifications</span>
+              <div className="px-4 py-3 border-b border-gray-100 dark:border-white/10 flex justify-between items-center bg-gray-50/50 dark:bg-zinc-950/50">
+                <span className="text-sm font-bold text-gray-900 dark:text-white">Notifications</span>
                 {notifications.length > 0 && (
                   <button 
                     onClick={handleClearAll}
@@ -94,10 +94,10 @@ const NotificationBell = () => {
                   notifications.map((n) => (
                     <div 
                       key={n.id} 
-                      className={`p-4 border-b border-gray-50 flex gap-3 transition-colors ${n.is_read ? 'opacity-60' : 'bg-blue-50/20'}`}
+                      className={`p-4 border-b border-gray-50 dark:border-white/5 flex gap-3 transition-colors ${n.is_read ? 'opacity-60' : 'bg-blue-50/20 dark:bg-brand-blue/10'}`}
                     >
                       <div className="flex-grow">
-                        <p className="text-sm text-gray-800">{n.message}</p>
+                        <p className="text-sm text-gray-800 dark:text-white/90">{n.message}</p>
                         <p className="text-[10px] text-gray-400 mt-1">
                           {new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </p>

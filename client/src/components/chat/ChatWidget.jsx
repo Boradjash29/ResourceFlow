@@ -44,84 +44,97 @@ const ChatWidget = () => {
       <AnimatePresence>
         {isOpen && (
           <motion.div 
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="mb-4 w-[400px] h-[550px] bg-white rounded-3xl shadow-2xl border border-gray-100 flex flex-col overflow-hidden"
+            initial={{ opacity: 0, scale: 0.95, y: 40, filter: 'blur(10px)' }}
+            animate={{ opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, scale: 0.95, y: 40, filter: 'blur(10px)' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+            className="mb-5 w-[420px] h-[600px] bg-white dark:bg-[#0C0C0E] rounded-[32px] shadow-2xl border border-gray-100 dark:border-white/5 flex flex-col overflow-hidden"
           >
-            {/* Header */}
-            <div className="bg-primary p-6 text-white flex justify-between items-center">
+            {/* Minimalist Header */}
+            <div className="p-6 border-b border-gray-50 dark:border-white/5 flex justify-between items-center bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md">
               <div className="flex items-center gap-3">
-                <div className="bg-white/20 p-2 rounded-xl">
-                  <Bot className="w-6 h-6" />
+                <div className="w-10 h-10 bg-brand-blue/10 rounded-xl flex items-center justify-center text-brand-blue">
+                  <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold">AI Assistant</h3>
+                  <h3 className="text-base font-bold text-[#1B2559] dark:text-white">AI Assistant</h3>
                   <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
-                    <span className="text-[10px] uppercase font-bold text-white/70">Powered by Gemini</span>
+                    <div className="h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.4)]"></div>
+                    <span className="text-[10px] uppercase font-bold tracking-widest text-brand-lavender">Online</span>
                   </div>
                 </div>
               </div>
-              <button onClick={() => setIsOpen(false)} className="hover:bg-white/10 p-1 rounded-lg">
+              <button 
+                onClick={() => setIsOpen(false)} 
+                className="p-2 hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors text-brand-lavender"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Chat list */}
+            {/* Refined Message List */}
             <div 
               ref={scrollRef}
-              className="flex-grow p-6 overflow-y-auto bg-gray-50/50 space-y-4 scroll-smooth"
+              className="flex-grow p-6 overflow-y-auto bg-brand-bg/20 dark:bg-zinc-950/20 space-y-6 custom-scrollbar"
             >
               {messages.map((m, idx) => (
-                <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[85%] p-4 rounded-2xl text-sm ${
+                <motion.div 
+                  key={idx} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-[85%] px-5 py-3.5 text-sm ${
                     m.role === 'user' 
-                      ? 'bg-primary text-white rounded-tr-none shadow-md' 
-                      : 'bg-white text-gray-800 rounded-tl-none border border-gray-100 shadow-sm'
+                      ? 'bg-brand-blue text-white rounded-2xl rounded-tr-none shadow-md' 
+                      : 'bg-white dark:bg-zinc-900 shadow-sm border border-gray-100 dark:border-white/5 text-[#1B2559] dark:text-white rounded-2xl rounded-tl-none'
                   }`}>
-                    {m.content}
+                    <p className="font-medium leading-relaxed">{m.content}</p>
                   </div>
-                </div>
+                </motion.div>
               ))}
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="bg-white p-4 rounded-2xl rounded-tl-none border border-gray-100 shadow-sm">
-                    <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                  <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl rounded-tl-none border border-gray-100 dark:border-white/5 shadow-sm">
+                    <Loader2 className="w-5 h-5 animate-spin text-brand-blue/40" />
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Input */}
-            <form onSubmit={handleSend} className="p-4 bg-white border-t border-gray-100 flex gap-2">
-              <input 
-                type="text" 
-                placeholder="Ask me anything..." 
-                className="flex-grow bg-gray-50 px-4 py-2 rounded-xl border-none outline-none text-sm focus:ring-2 focus:ring-primary/20 transition-all"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-              />
-              <button 
-                type="submit" 
-                disabled={isLoading || !input.trim()}
-                className="bg-primary text-white p-2 rounded-xl hover:bg-primary-dark transition-colors disabled:opacity-50"
+            {/* Minimalist Input Bar */}
+            <div className="p-6 bg-white dark:bg-[#0C0C0E] border-t border-gray-50 dark:border-white/5">
+              <form 
+                onSubmit={handleSend} 
+                className="relative flex items-center"
               >
-                <Send className="w-5 h-5" />
-              </button>
-            </form>
+                <input 
+                  type="text" 
+                  placeholder="Ask a question..." 
+                  className="w-full bg-brand-bg/50 dark:bg-zinc-950/50 pl-5 pr-14 py-4 rounded-2xl outline-none text-sm font-medium text-[#1B2559] dark:text-white border border-transparent focus:border-brand-blue/20 focus:bg-white dark:focus:bg-zinc-900 transition-all"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                />
+                <button 
+                  type="submit" 
+                  disabled={isLoading || !input.trim()}
+                  className="absolute right-2 p-2.5 bg-brand-blue text-white rounded-xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-brand-blue/20 disabled:opacity-0 disabled:scale-90"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </form>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
 
       <motion.button 
-        whileHover={{ scale: 1.05 }}
+        whileHover={{ scale: 1.05, y: -2 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="bg-primary text-white p-4 rounded-2xl shadow-xl flex items-center gap-2"
+        className="bg-brand-blue text-white w-16 h-16 rounded-[22px] shadow-2xl flex items-center justify-center border border-brand-blue/20"
       >
-        <Sparkles className="w-6 h-6" />
-        <span className="font-bold">Ask AI</span>
+        {isOpen ? <X className="w-7 h-7" /> : <Sparkles className="w-7 h-7" />}
       </motion.button>
     </div>
   );

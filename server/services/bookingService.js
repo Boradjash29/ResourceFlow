@@ -28,14 +28,30 @@ export const createBookingInternal = async ({
       throw { status: 400, message: 'Resource is currently unavailable' };
     }
 
-    // 2. Check for conflicts
+    // 2. Capacity Check
+    const participantCount = Array.isArray(participants) ? participants.length : 0;
+    if (resource.capacity && participantCount > resource.capacity) {
+      throw { status: 400, message: `Resource capacity exceeded. Max: ${resource.capacity}, Requested: ${participantCount}` };
+    }
+
+    // 3. Time Validation
+    const start = new Date(start_time);
+    const end = new Date(end_time);
+    if (isNaN(start) || isNaN(end) || start >= end) {
+      throw { status: 400, message: 'Invalid time range provided' };
+    }
+    if (start < new Date()) {
+      throw { status: 400, message: 'Cannot book in the past' };
+    }
+
+    // 3. Check for conflicts
     const conflict = await tx.booking.findFirst({
       where: {
         resource_id,
         status: { not: 'cancelled' },
         AND: [
-          { start_time: { lt: new Date(end_time) } },
-          { end_time: { gt: new Date(start_time) } }
+          { start_time: { lt: end } },
+          { end_time: { gt: start } }
         ]
       }
     });

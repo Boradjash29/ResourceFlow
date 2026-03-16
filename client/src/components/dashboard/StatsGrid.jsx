@@ -2,15 +2,13 @@ import React from 'react';
 import { Users, Calendar, CheckCircle, Package } from 'lucide-react';
 
 const StatsCard = ({ title, value, icon: Icon, colorClass }) => (
-  <div className="card">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-        <p className="text-2xl font-bold text-gray-900">{value}</p>
-      </div>
-      <div className={`p-3 rounded-xl ${colorClass}`}>
-        <Icon className="w-6 h-6" />
-      </div>
+  <div className="card flex items-center gap-4 py-5 px-6">
+    <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${colorClass.replace('text-', 'bg-').split(' ')[0]}/10 ${colorClass.split(' ')[1]} dark:bg-zinc-950/50 dark:border dark:border-white/5`}>
+      <Icon className="w-7 h-7" />
+    </div>
+    <div>
+      <p className="text-sm font-bold text-brand-lavender mb-1 uppercase tracking-wider">{title}</p>
+      <p className="text-2xl font-extrabold text-[#1B2559] dark:text-white">{value}</p>
     </div>
   </div>
 );
