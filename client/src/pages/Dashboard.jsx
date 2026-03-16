@@ -6,6 +6,7 @@ import Bookings from './Bookings';
 import Overview from './Overview';
 import BookingForm from '../components/booking/BookingForm';
 import NotificationBell from '../components/notifications/NotificationBell';
+import ChatWidget from '../components/chat/ChatWidget';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -85,13 +86,11 @@ const Dashboard = () => {
       </main>
 
       {/* Booking Modal */}
-      {selectedResource && (
-        <BookingForm 
-          resource={selectedResource} 
-          onClose={() => setSelectedResource(null)}
-          onSuccess={handleBookingSuccess}
         />
       )}
+
+      {/* AI Assistant */}
+      <ChatWidget />
     </div>
   );
 };
