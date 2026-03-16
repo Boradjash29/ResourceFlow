@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import api from '../../lib/api';
+import api from '../lib/api';
 import StatsGrid from '../components/dashboard/StatsGrid';
 import UtilizationChart from '../components/dashboard/UtilizationChart';
 import { Loader2, TrendingUp, Calendar } from 'lucide-react';
