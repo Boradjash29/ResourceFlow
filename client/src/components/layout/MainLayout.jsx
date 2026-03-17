@@ -66,20 +66,20 @@ const MainLayout = ({ children, activeTabOverride }) => {
         </div>
 
         <nav className="flex-grow space-y-2">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => handleNavClick(item)}
-              className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 font-medium ${activeTab === item.id ? 'bg-white/10 text-white shadow-none font-bold' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
-            >
-              <item.icon className={`w-5 h-5 ${activeTab === item.id ? 'text-white' : 'text-white/40'}`} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-
-          {isAdmin && (
-            <div className="pt-8 space-y-2">
-              <p className="px-4 text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-4">Administration</p>
+          {!isAdmin ? (
+            navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleNavClick(item)}
+                className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 font-medium ${activeTab === item.id ? 'bg-white/10 text-white shadow-none font-bold' : 'text-white/60 hover:bg-white/5 hover:text-white'}`}
+              >
+                <item.icon className={`w-5 h-5 ${activeTab === item.id ? 'text-white' : 'text-white/40'}`} />
+                <span>{item.label}</span>
+              </button>
+            ))
+          ) : (
+            <>
+              <p className="px-4 text-[10px] font-extrabold text-white/40 uppercase tracking-widest mb-4">Management</p>
               {adminItems.map((item) => (
                 <button
                   key={item.id}
@@ -90,7 +90,7 @@ const MainLayout = ({ children, activeTabOverride }) => {
                   <span>{item.label}</span>
                 </button>
               ))}
-            </div>
+            </>
           )}
         </nav>
 

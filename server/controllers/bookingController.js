@@ -1,6 +1,7 @@
 import prisma from '../config/prisma.js';
 import { getSuggestions } from '../utils/smartSuggestions.js';
 import { createBookingInternal } from '../services/bookingService.js';
+import { createAuditLog } from '../services/auditService.js';
 
 export const getAllBookings = async (req, res) => {
   const { role, id: userId } = req.user;
@@ -65,6 +66,16 @@ export const createBooking = async (req, res) => {
       participants
     });
 
+    await createAuditLog({
+      userId: userId,
+      action: 'CREATE',
+      entityType: 'booking',
+      entityId: booking.id,
+      details: { title: booking.meeting_title, resource_id },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(201).json({ message: 'Booking created successfully', booking });
   } catch (error) {
     console.error('Error creating booking:', error);
@@ -106,6 +117,16 @@ export const cancelBooking = async (req, res) => {
         status: 'cancelled',
         updated_at: new Date()
       }
+    });
+
+    await createAuditLog({
+      userId: userId,
+      action: 'CANCEL',
+      entityType: 'booking',
+      entityId: id,
+      details: { booking_id: id },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
     });
 
     res.status(200).json({ message: 'Booking cancelled successfully' });

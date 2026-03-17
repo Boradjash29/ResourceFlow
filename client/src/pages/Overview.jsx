@@ -23,36 +23,59 @@ const Overview = () => {
     return 'Good evening';
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [statsRes, utilRes, eventsRes, calRes] = await Promise.all([
-          api.get('/analytics/stats'),
-          api.get(`/analytics/utilization?filter=${utilizationFilter}`),
-          api.get('/analytics/events'),
-          api.get('/analytics/calendar')
-        ]);
-        setStats(statsRes.data);
-        setUtilization(utilRes.data);
-        setEvents(eventsRes.data);
-        setCalendar(calRes.data);
-        console.log("Chart Data Debug:", { utilization: utilRes.data });
-      } catch (error) {
-        console.error('Error fetching analytics:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [utilizationFilter]);
+  const [loadingUtilization, setLoadingUtilization] = useState(false);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <Loader2 className="w-10 h-10 animate-spin text-primary" />
-      </div>
-    );
-  }
+  const fetchStats = async () => {
+    try {
+      const res = await api.get('/analytics/stats');
+      setStats(res.data);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchUtilization = async () => {
+    setLoadingUtilization(true);
+    try {
+      const res = await api.get(`/analytics/utilization?filter=${utilizationFilter}`);
+      setUtilization(res.data);
+    } catch (e) { console.error(e); }
+    setLoadingUtilization(false);
+  };
+
+  const fetchEvents = async () => {
+    try {
+      const res = await api.get('/analytics/events');
+      setEvents(res.data);
+    } catch (e) { console.error(e); }
+  };
+
+  const fetchCalendar = async () => {
+    try {
+      const res = await api.get('/analytics/calendar');
+      setCalendar(res.data);
+    } catch (e) { console.error(e); }
+  };
+
+  // Initial load
+  useEffect(() => {
+    const loadAll = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchStats(),
+        fetchUtilization(),
+        fetchEvents(),
+        fetchCalendar()
+      ]);
+      setLoading(false);
+    };
+    loadAll();
+  }, []);
+
+  // Filter-only load
+  useEffect(() => {
+    if (!loading) {
+      fetchUtilization();
+    }
+  }, [utilizationFilter]);
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -66,23 +89,45 @@ const Overview = () => {
         <p className="text-sm text-brand-lavender font-medium">Real-time resource utilization and planning data.</p>
       </header>
 
-      <StatsGrid stats={stats} />
+      {!stats ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 px-2">
+          {[1, 2, 3, 4].map(i => <div key={i} className="h-32 bg-white/50 dark:bg-zinc-900/50 animate-pulse rounded-3xl" />)}
+        </div>
+      ) : (
+        <StatsGrid stats={stats} />
+      )}
 
       {/* New Dual Column Layout matching Think Thunder */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Left Column (Span 2) */}
         <div className="lg:col-span-2 flex flex-col gap-8">
-          <UpcomingEventsBanner events={events} />
-          <ProgressReportChart 
-            data={utilization} 
-            activeFilter={utilizationFilter}
-            onFilterChange={setUtilizationFilter}
-          />
+          {!events ? (
+             <div className="h-40 bg-white/50 dark:bg-zinc-900/50 animate-pulse rounded-3xl" />
+          ) : (
+            <UpcomingEventsBanner events={events} />
+          )}
+          
+          <div className="relative">
+            <ProgressReportChart 
+              data={utilization} 
+              activeFilter={utilizationFilter}
+              onFilterChange={setUtilizationFilter}
+            />
+            {(loadingUtilization || !utilization.length) && (
+              <div className="absolute inset-0 bg-white/50 dark:bg-zinc-900/50 flex items-center justify-center rounded-3xl z-10">
+                <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+              </div>
+            )}
+          </div>
         </div>
         
         {/* Right Column (Span 1) */}
         <div className="lg:col-span-1 flex flex-col gap-8 h-full">
-           <CalendarWidget activeDays={calendar} />
+           {!calendar ? (
+              <div className="flex-grow bg-white/50 dark:bg-zinc-900/50 animate-pulse rounded-3xl min-h-[400px]" />
+           ) : (
+             <CalendarWidget activeDays={calendar} />
+           )}
         </div>
       </div>
     </div>

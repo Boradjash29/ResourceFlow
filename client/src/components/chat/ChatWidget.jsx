@@ -2,12 +2,25 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bot, X, Send, Loader2, User, Sparkles } from 'lucide-react';
 import api from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 
 const ChatWidget = () => {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     { role: 'assistant', content: 'Hi! I am your ResourceFlow Assistant. Looking for a room or equipment today?' }
   ]);
+
+  // Personalize initial message when user data is available
+  useEffect(() => {
+    if (user?.name) {
+      const firstName = user.name.split(' ')[0];
+      setMessages([
+        { role: 'assistant', content: `Hi ${firstName}! I am your ResourceFlow Assistant. Looking for a room or equipment today?` }
+      ]);
+    }
+  }, [user]);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef(null);

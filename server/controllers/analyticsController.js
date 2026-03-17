@@ -1,31 +1,53 @@
 import prisma from '../config/prisma.js';
 
+// Simple TTL-based cache for analytics
+const analyticsCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+const getCachedData = (key) => {
+  const cached = analyticsCache.get(key);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    return cached.data;
+  }
+  return null;
+};
+
+const setCachedData = (key, data) => {
+  analyticsCache.set(key, { data, timestamp: Date.now() });
+};
+
 export const getDashboardStats = async (req, res) => {
   try {
-    const totalResources = await prisma.resource.count();
-    const totalBookings = await prisma.booking.count({
-      where: { status: { not: 'cancelled' } }
-    });
-    const activeBookings = await prisma.booking.count({
-      where: {
-        status: 'confirmed',
-        start_time: { lte: new Date() },
-        end_time: { gte: new Date() }
-      }
-    });
-
-    const availableResources = await prisma.resource.count({
-      where: {
-        status: 'available',
-        bookings: {
-          none: {
-            status: 'confirmed',
-            start_time: { lte: new Date() },
-            end_time: { gte: new Date() }
+    const [
+      totalResources,
+      totalBookings,
+      activeBookings,
+      availableResources
+    ] = await Promise.all([
+      prisma.resource.count(),
+      prisma.booking.count({
+        where: { status: { not: 'cancelled' } }
+      }),
+      prisma.booking.count({
+        where: {
+          status: 'confirmed',
+          start_time: { lte: new Date() },
+          end_time: { gte: new Date() }
+        }
+      }),
+      prisma.resource.count({
+        where: {
+          status: 'available',
+          bookings: {
+            none: {
+              status: 'confirmed',
+              start_time: { lte: new Date() },
+              end_time: { gte: new Date() }
+            }
           }
         }
-      }
-    });
+      })
+    ]);
 
     res.status(200).json({
       totalResources,
@@ -42,8 +64,12 @@ export const getDashboardStats = async (req, res) => {
 export const getUtilizationData = async (req, res) => {
   try {
     const { filter = 'week' } = req.query;
-    let result;
+    const cacheKey = `utilization:${filter}`;
+    
+    const cached = getCachedData(cacheKey);
+    if (cached) return res.status(200).json(cached);
 
+    let result;
     if (filter === 'year') {
       result = await prisma.$queryRaw`
         SELECT 
@@ -99,6 +125,7 @@ export const getUtilizationData = async (req, res) => {
       utilized: Number(row.utilized)
     }));
 
+    setCachedData(cacheKey, formattedResult);
     res.status(200).json(formattedResult);
   } catch (error) {
     console.error('Error fetching utilization data:', error);

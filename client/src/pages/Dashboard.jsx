@@ -12,7 +12,12 @@ import MainLayout from '../components/layout/MainLayout';
 const Dashboard = () => {
   const { user } = useAuth();
   const location = useLocation();
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => {
+    // If we have state from navigation, use it
+    if (location.state?.activeTab) return location.state.activeTab;
+    // Otherwise default based on role
+    return user?.role === 'admin' ? 'manage-resources' : 'overview';
+  });
   const [selectedResource, setSelectedResource] = useState(null);
 
   // Sync activeTab with location state if navigated from sidebar
@@ -21,6 +26,15 @@ const Dashboard = () => {
       setActiveTab(location.state.activeTab);
     }
   }, [location.state]);
+
+  // Sync activeTab with user role on switch
+  useEffect(() => {
+    if (user?.role === 'admin' && (activeTab === 'overview' || activeTab === 'resources' || activeTab === 'bookings')) {
+      setActiveTab('manage-resources');
+    } else if (user?.role === 'employee' && (activeTab === 'manage-resources' || activeTab === 'audit-logs')) {
+      setActiveTab('overview');
+    }
+  }, [user?.role]);
 
   const isAdmin = user?.role === 'admin';
 

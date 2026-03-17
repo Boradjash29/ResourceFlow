@@ -1,4 +1,5 @@
 import prisma from '../config/prisma.js';
+import { createAuditLog } from '../services/auditService.js';
 
 export const getAllResources = async (req, res) => {
   const { type, status, capacity_min, search, page = 1, limit = 10 } = req.query;
@@ -85,6 +86,16 @@ export const createResource = async (req, res) => {
       }
     });
 
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'CREATE',
+      entityType: 'resource',
+      entityId: resource.id,
+      details: { name: resource.name, type: resource.type },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(201).json({ message: 'Resource created successfully', resource });
   } catch (error) {
     console.error('Error creating resource:', error);
@@ -128,6 +139,16 @@ export const updateResource = async (req, res) => {
       }
     });
 
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'UPDATE',
+      entityType: 'resource',
+      entityId: resource.id,
+      details: { name: resource.name, changes: req.body },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(200).json({ message: 'Resource updated successfully', resource });
   } catch (error) {
     console.error('Error updating resource:', error);
@@ -159,6 +180,16 @@ export const deleteResource = async (req, res) => {
       where: { id }
     });
     
+    await createAuditLog({
+      userId: req.user.id,
+      action: 'DELETE',
+      entityType: 'resource',
+      entityId: id,
+      details: { id },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     res.status(200).json({ message: 'Resource deleted successfully' });
   } catch (error) {
     console.error('Error deleting resource:', error);
