@@ -14,11 +14,14 @@ export const createBookingInternal = async ({
   description, 
   participants = [] 
 }) => {
+  console.log(`[BOOKING SERVICE] Attempting to book resource: ${resource_id}`);
   return await prisma.$transaction(async (tx) => {
     // 1. Validate resource
     const resource = await tx.resource.findUnique({
       where: { id: resource_id }
     });
+
+    console.log(`[BOOKING SERVICE] Resource lookup result:`, resource ? `Found (${resource.name})` : 'NOT FOUND');
 
     if (!resource) {
       throw { status: 404, message: 'Resource not found' };

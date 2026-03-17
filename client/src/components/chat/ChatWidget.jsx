@@ -33,7 +33,7 @@ const ChatWidget = () => {
       });
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.message }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please check your API key connection.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I am having trouble connecting to the server. Please check your internet connection and try again.' }]);
     } finally {
       setIsLoading(false);
     }

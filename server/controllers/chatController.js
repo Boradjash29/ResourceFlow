@@ -160,6 +160,11 @@ ${userBookings.length > 0
     // 4. Get LLM response with resource context awareness
     let aiText = await getAIResponse(messages, finalContext, dbUser.role, dbUser.name, hasResourceContext);
 
+    console.log(`[AI CHAT] AI Response: "${aiText}"`);
+    if (hasResourceContext) {
+      console.log(`[AI CHAT] Current context has ${relevantResources.length} resources.`);
+    }
+
     // Response sanitizer: strip any markdown code fences the LLM occasionally leaks
     // e.g. ```tool_code``` or ```json ... ``` should never appear in plain-text chat
     aiText = aiText.replace(/```[\w]*\n?[\s\S]*?```/g, '').trim();
@@ -167,11 +172,34 @@ ${userBookings.length > 0
     // 4. Intercept [BOOK_ACTION]
     const actionMatch = aiText.match(/\[BOOK_ACTION:\s*({.*?})\]/);
     if (actionMatch) {
+      console.log(`[AI BOOKING] Action tag detected: ${actionMatch[0]}`);
       try {
         const actionData = JSON.parse(actionMatch[1]);
+        console.log(`[AI BOOKING] Parsed Action Data:`, actionData);
+        let resourceIdToBook = actionData.resource_id;
+
+        // Fallback: If AI hallucinated the resource's literal name instead of providing its UUID
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resourceIdToBook)) {
+           console.log(`[AI BOOKING] AI sent non-UUID resource: "${resourceIdToBook}". Attempting fallback lookup by name.`);
+           const foundResource = await prisma.resource.findFirst({
+             where: { name: { contains: resourceIdToBook.trim(), mode: 'insensitive' } },
+             select: { id: true, name: true }
+           });
+           if (foundResource) {
+             console.log(`[AI BOOKING] Fallback successful. Found ${foundResource.name} with UUID: ${foundResource.id}`);
+             resourceIdToBook = foundResource.id;
+           } else {
+             throw new Error(`Invalid resource ID or name provided: ${resourceIdToBook}`);
+           }
+        } else {
+           console.log(`[AI BOOKING] AI sent valid UUID: ${resourceIdToBook}`);
+        }
+
+        console.log(`[AI BOOKING] Proceeding to book resource ID: ${resourceIdToBook} for User ID: ${req.user.id}`);
         const booking = await createBookingInternal({
           user_id: req.user.id,
-          ...actionData
+          ...actionData,
+          resource_id: resourceIdToBook
         });
 
         // Clean up the tag and add confirmation
@@ -183,6 +211,10 @@ ${userBookings.length > 0
         aiText += `\n\n❌ Sorry, I tried to book that for you but ran into an error: ${err.message || 'Unknown error'}.`;
       }
     }
+
+    // ID sanitizer: strip any [RES_ID: ...] tags the AI might repeat from its context block
+    // (Move this after action interception so we don't accidentally corrupt the JSON string)
+    aiText = aiText.replace(/\[RES_ID:[^\]]+\]\s*/g, '').trim();
 
     res.status(200).json({
       message: aiText,

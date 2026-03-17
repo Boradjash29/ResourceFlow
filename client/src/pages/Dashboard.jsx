@@ -47,9 +47,9 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-brand-bg dark:bg-zinc-950 flex p-6 gap-6 transition-colors duration-300">
-      {/* Sidebar */}
-      <aside className="w-72 bg-white dark:bg-zinc-900 rounded-4xl shadow-soft dark:shadow-none flex flex-col p-8 sticky top-6 h-[calc(100vh-3rem)] border border-transparent dark:border-white/5">
+    <div className="min-h-screen w-full flex bg-brand-bg dark:bg-zinc-950 transition-colors duration-300 overflow-hidden relative">
+        {/* Sidebar */}
+        <aside className="w-72 h-screen bg-white dark:bg-zinc-900 flex flex-col p-8 shrink-0 z-10 border-r border-gray-100 dark:border-zinc-800">
         <div className="flex items-center gap-3 mb-12 px-2">
           <div className="w-10 h-10 bg-brand-blue rounded-xl flex items-center justify-center text-white shadow-lg shadow-brand-blue/20">
             <LayoutDashboard className="w-6 h-6" />
@@ -86,7 +86,7 @@ const Dashboard = () => {
           )}
         </nav>
 
-        <div className="pt-8 border-t border-gray-100 dark:border-white/5">
+        <div className="pt-8 mt-auto border-t border-gray-100 dark:border-white/5">
           <button onClick={logout} className="sidebar-link w-full text-left hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 group">
             <LogOut className="w-5 h-5 group-hover:text-red-500" />
             Logout
@@ -95,9 +95,9 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-grow flex flex-col gap-6">
+      <div className="flex-grow flex flex-col bg-brand-bg dark:bg-zinc-950 h-full overflow-y-auto overflow-x-hidden">
         {/* Unified Top header */}
-        <header className="glass-card flex items-center justify-between px-6 py-4">
+        <header className="flex items-center justify-between px-10 py-6 sticky top-0 z-20 bg-brand-bg/80 dark:bg-zinc-950/80 backdrop-blur-md">
           <div className="text-sm font-medium text-brand-lavender">
             Pages / <span className="text-brand-blue capitalize font-bold">{activeTab.replace('-', ' ')}</span>
           </div>
@@ -133,7 +133,7 @@ const Dashboard = () => {
           </div>
         </header>
 
-        <main className="w-full">
+        <main className="w-full px-10 pb-10">
           {activeTab === 'overview' && <Overview />}
           {activeTab === 'resources' && (
             <Resources onBook={(resource) => setSelectedResource(resource)} />
