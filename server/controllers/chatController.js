@@ -121,7 +121,7 @@ Activity Level: ${totalBookingsCount} total bookings
 
 YOUR RECENT/UPCOMING SCHEDULE:
 ${userBookings.length > 0 
-  ? userBookings.map(b => `- ${b.meeting_title}: ${b.start_time.toLocaleString()} to ${b.end_time.toLocaleTimeString()}`).join('\n')
+  ? userBookings.map(b => `- [BOOK_ID: ${b.id}] ${b.meeting_title}: ${b.start_time.toLocaleString()} to ${b.end_time.toLocaleTimeString()}`).join('\n')
   : 'You have no upcoming bookings.'}`;
 
     // Structure resource context grouped by type — so AI responds by category
@@ -212,7 +212,153 @@ ${userBookings.length > 0
       }
     }
 
-    // ID sanitizer: strip any [RES_ID: ...] tags the AI might repeat from its context block
+    // 5. Intercept [ADD_RESOURCE_ACTION]
+    const addResourceMatch = aiText.match(/\[ADD_RESOURCE_ACTION:\s*({.*?})\]/);
+    if (addResourceMatch) {
+      console.log(`[AI ADMIN] Add Resource tag detected: ${addResourceMatch[0]}`);
+      try {
+        if (dbUser.role !== 'admin') {
+          throw new Error('Unauthorized: Only admins can add resources.');
+        }
+
+        const resourceData = JSON.parse(addResourceMatch[1]);
+        console.log(`[AI ADMIN] Creating Resource:`, resourceData);
+
+        const newResource = await prisma.resource.create({
+          data: {
+            ...resourceData,
+            capacity: parseInt(resourceData.capacity) || 0,
+            status: 'available'
+          }
+        });
+
+        console.log(`[AI ADMIN] Resource created: ${newResource.id}. Triggering vector sync.`);
+        
+        // Background sync so we don't block the chat response
+        syncAllResources().catch(err => console.error('[AI ADMIN] Vector sync failed:', err));
+
+        // Clean up tag and add confirmation
+        aiText = aiText.replace(addResourceMatch[0], '').trim();
+        aiText += `\n\n✅ Resource Created! I've added "${newResource.name}" to the system. You can now manage it in the admin dashboard.`;
+      } catch (err) {
+        console.error('AI Resource Creation Failed:', err);
+        aiText = aiText.replace(addResourceMatch[0], '').trim();
+        aiText += `\n\n❌ Error creating resource: ${err.message || 'Unknown error'}.`;
+      }
+    }
+
+    // 6. Intercept [UPDATE_RESOURCE_ACTION] (Admin Only)
+    const updateResourceMatch = aiText.match(/\[UPDATE_RESOURCE_ACTION:\s*({.*?})\]/);
+    if (updateResourceMatch) {
+      console.log(`[AI ADMIN] Update Resource tag detected: ${updateResourceMatch[0]}`);
+      try {
+        if (dbUser.role !== 'admin') {
+          throw new Error('Unauthorized: Only admins can update resources.');
+        }
+
+        const updateData = JSON.parse(updateResourceMatch[1]);
+        const { resource_id, ...data } = updateData;
+
+        console.log(`[AI ADMIN] Updating Resource ${resource_id}:`, data);
+
+        const updatedResource = await prisma.resource.update({
+          where: { id: resource_id },
+          data: {
+            ...data,
+            capacity: data.capacity ? parseInt(data.capacity) : undefined,
+            updated_at: new Date()
+          }
+        });
+
+        console.log(`[AI ADMIN] Resource updated: ${updatedResource.id}. Triggering vector sync.`);
+        syncAllResources().catch(err => console.error('[AI ADMIN] Vector sync failed:', err));
+
+        aiText = aiText.replace(updateResourceMatch[0], '').trim();
+        aiText += `\n\n✅ Resource Updated! I've updated "${updatedResource.name}". Changes are now live.`;
+      } catch (err) {
+        console.error('AI Resource Update Failed:', err);
+        aiText = aiText.replace(updateResourceMatch[0], '').trim();
+        aiText += `\n\n❌ Error updating resource: ${err.message || 'Unknown error'}.`;
+      }
+    }
+
+    // 7. Intercept [DELETE_RESOURCE_ACTION] (Admin Only)
+    const deleteResourceMatch = aiText.match(/\[DELETE_RESOURCE_ACTION:\s*({.*?})\]/);
+    if (deleteResourceMatch) {
+      console.log(`[AI ADMIN] Delete Resource tag detected: ${deleteResourceMatch[0]}`);
+      try {
+        if (dbUser.role !== 'admin') {
+          throw new Error('Unauthorized: Only admins can delete resources.');
+        }
+
+        const { resource_id } = JSON.parse(deleteResourceMatch[1]);
+        console.log(`[AI ADMIN] Deleting Resource: ${resource_id}`);
+
+        // Check for future bookings first
+        const bookings = await prisma.booking.findMany({
+          where: {
+            resource_id: resource_id,
+            status: { not: 'cancelled' },
+            end_time: { gt: new Date() }
+          }
+        });
+
+        if (bookings.length > 0) {
+          throw new Error(`This resource has ${bookings.length} future bookings. Please cancel them manually before deletion.`);
+        }
+
+        const deletedResource = await prisma.resource.delete({
+          where: { id: resource_id }
+        });
+
+        console.log(`[AI ADMIN] Resource deleted: ${resource_id}. Triggering vector sync.`);
+        syncAllResources().catch(err => console.error('[AI ADMIN] Vector sync failed:', err));
+
+        aiText = aiText.replace(deleteResourceMatch[0], '').trim();
+        aiText += `\n\n✅ Resource Deleted! I've removed "${deletedResource.name}" from the system. (Vector DB sync triggered)`;
+      } catch (err) {
+        console.error('AI Resource Deletion Failed:', err);
+        aiText = aiText.replace(deleteResourceMatch[0], '').trim();
+        aiText += `\n\n❌ Error deleting resource: ${err.message || 'Unknown error'}.`;
+      }
+    }
+
+    // 8. Intercept [CANCEL_BOOK_ACTION]
+    const cancelMatch = aiText.match(/\[CANCEL_BOOK_ACTION:\s*({.*?})\]/);
+    if (cancelMatch) {
+      console.log(`[AI CANCEL] Cancel tag detected: ${cancelMatch[0]}`);
+      try {
+        const { booking_id } = JSON.parse(cancelMatch[1]);
+        
+        // Verify booking ownership (unless admin)
+        const booking = await prisma.booking.findUnique({
+          where: { id: booking_id },
+          include: { resource: true }
+        });
+
+        if (!booking) throw new Error('Booking not found.');
+        if (booking.user_id !== req.user.id && req.user.role !== 'admin') {
+          throw new Error('Unauthorized.');
+        }
+
+        const cancelled = await prisma.booking.update({
+          where: { id: booking_id },
+          data: { status: 'cancelled' },
+          include: { resource: true }
+        });
+
+        console.log(`[AI CANCEL] Booking ${booking_id} cancelled.`);
+        aiText = aiText.replace(cancelMatch[0], '').trim();
+        aiText += `\n\n✅ Done! I've cancelled your booking for ${cancelled.resource.name} on ${cancelled.start_time.toLocaleDateString()}.`;
+      } catch (err) {
+        console.error('AI Cancellation Failed:', err);
+        aiText = aiText.replace(cancelMatch[0], '').trim();
+        aiText += `\n\n❌ Error cancelling booking: ${err.message || 'Unknown error'}.`;
+      }
+    }
+
+    // ID sanitizer: strip any [RES_ID: ...] or [BOOK_ID: ...] tags the AI might repeat
+    aiText = aiText.replace(/\[(RES|BOOK)_ID:[^\]]+\]\s*/g, '').trim();
     // (Move this after action interception so we don't accidentally corrupt the JSON string)
     aiText = aiText.replace(/\[RES_ID:[^\]]+\]\s*/g, '').trim();
 

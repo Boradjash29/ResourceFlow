@@ -38,14 +38,13 @@ const ProgressReportChart = ({ data = [], activeFilter = 'week', onFilterChange 
 
       <div className="w-full h-[220px]">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 20, left: -20, bottom: 0 }}>
+          <LineChart data={data} margin={{ top: 5, right: 30, left: -10, bottom: 30 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
             <XAxis 
               dataKey="date" 
               axisLine={false} 
               tickLine={false} 
               tick={{ fill: '#A3AED0', fontSize: 12, fontWeight: 600 }}
-              dy={10}
             />
             <YAxis 
               axisLine={false} 
@@ -60,9 +59,9 @@ const ProgressReportChart = ({ data = [], activeFilter = 'week', onFilterChange 
               type="monotone" 
               dataKey="utilized" 
               stroke="#4318FF" 
-              strokeWidth={4} 
+              strokeWidth={3} 
               dot={false}
-              activeDot={{ r: 8, fill: '#4318FF', stroke: '#fff', strokeWidth: 3 }}
+              activeDot={{ r: 6, fill: '#4318FF', stroke: '#fff', strokeWidth: 2 }}
             />
             <Line 
               type="monotone" 

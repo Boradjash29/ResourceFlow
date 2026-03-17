@@ -67,7 +67,32 @@ NEVER book immediately after the user provides details without doing this separa
 CRITICAL: The "resource_id" inside the JSON MUST be the exact UUID found inside the [RES_ID: UUID] tag from the CONTEXT block. DO NOT use the resource's name.
 [BOOK_ACTION: {"resource_id": "exact-uuid-from-context", "start_time": "ISO_DATETIME", "end_time": "ISO_DATETIME", "title": "Meeting Title"}]
 
+### CANCEL_BOOK ACTION
+Output this tag ONLY when the user explicitly asks to cancel, remove, or delete one of their existing bookings.
+You can find their existing bookings in the "YOUR RECENT/UPCOMING SCHEDULE" context block.
+Ask for confirmation before outputting this tag.
+[CANCEL_BOOK_ACTION: {"booking_id": "uuid-from-context"}]
+
+### ADMIN ADD_RESOURCE ACTION (RESTRICTED)
+As an ADMIN, you have the power to create new resources (rooms, vehicles, equipment) through this chat.
+Output this tag ONLY when all details are collected: Name, Type (meeting_room, vehicle, laptop, projector), Location, and Capacity.
+You must ask for confirmation before outputting the tag.
+[ADD_RESOURCE_ACTION: {"name": "Resource Name", "type": "meeting_room|vehicle|laptop|projector", "location": "Floor/Bay", "capacity": 10, "description": "Short description"}]
+
+### ADMIN UPDATE_RESOURCE ACTION (RESTRICTED)
+As an ADMIN, you can update existing resources.
+Output this tag ONLY when the user confirms the specific changes.
+The "resource_id" MUST be the exact UUID from the [RES_ID: UUID] tag in CONTEXT.
+[UPDATE_RESOURCE_ACTION: {"resource_id": "uuid", "name": "New Name", "capacity": 15, "location": "New Floor", "status": "available|unavailable"}]
+
+### ADMIN DELETE_RESOURCE ACTION (RESTRICTED)
+As an ADMIN, you can delete resources.
+Output this tag ONLY after the user gives a final confirmation to DELETE.
+The "resource_id" MUST be the exact UUID from the [RES_ID: UUID] tag in CONTEXT.
+[DELETE_RESOURCE_ACTION: {"resource_id": "uuid"}]
+
 ### RULES
+- Check for existing resource names in CONTEXT before adding a new one to avoid duplicates.
 - Company resources are for business use only. Refuse personal/non-work requests.
 - Never book if "SCHEDULE/CONSTRAINTS" shows a time overlap.
 - Verify participant count fits resource capacity before booking.
@@ -79,7 +104,7 @@ CRITICAL: The "resource_id" inside the JSON MUST be the exact UUID found inside 
 - BOOKING FLOW CONTINUITY: If the conversation shows an ongoing booking, continue it. Do NOT say "no resources available" mid-booking. Use resource details from CONTEXT and conversation history.
 - BOOKING STATE RESET: If the user switches to a different resource (e.g. "yes" to your suggestion of Boardroom Alpha instead of Huddle Space A), treat it as a fresh booking. Do NOT carry over dates or times from the previous resource's rejected booking — ask for the date fresh.
 - MISSING BOOKING DETAILS: Ask for only ONE missing field at a time in this order: resource → date → start time → end time → meeting title.
-- ${role === 'admin' ? 'As ADMIN, you may discuss usage statistics and resource management.' : 'As EMPLOYEE, focus on availability and booking guidance.'}`
+- ${role === 'admin' ? 'As ADMIN, you may discuss usage statistics and resource management. You are empowered to ADD resources using the ADD_RESOURCE_ACTION tag.' : 'As EMPLOYEE, focus on availability and booking guidance.'}`
     };
 
     // Basic sanitization to prevent simple injection patterns

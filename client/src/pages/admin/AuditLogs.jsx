@@ -64,11 +64,11 @@ const AuditLogs = () => {
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                        log.action_type === 'CREATE' ? 'bg-green-100 text-green-700' :
-                        log.action_type === 'DELETE' ? 'bg-red-100 text-red-700' :
-                        log.action_type === 'UPDATE' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
+                        log.action === 'CREATE' ? 'bg-green-100 text-green-700' :
+                        log.action === 'DELETE' ? 'bg-red-100 text-red-700' :
+                        log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
                       }`}>
-                        {log.action_type}
+                        {log.action}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -78,12 +78,12 @@ const AuditLogs = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600">
-                      {log.details.action || 'Unknown Action'}
+                      {log.details?.action || 'Unknown Action'}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-2 text-xs font-medium text-gray-500">
                         <Database className="w-3 h-3" />
-                        Table: {log.table_name}
+                        Type: {log.entity_type}
                       </div>
                     </td>
                   </tr>

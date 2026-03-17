@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import ResourceCard from '../components/resource/ResourceCard';
-import { Search, Filter, Loader2, Sparkles } from 'lucide-react';
+import { Search, Filter, Loader2, Sparkles, Package } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Resources = ({ onBook }) => {

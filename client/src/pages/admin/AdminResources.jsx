@@ -23,7 +23,8 @@ const AdminResources = () => {
   const fetchResources = async () => {
     try {
       const response = await api.get('/resources');
-      setResources(response.data);
+      // The API returns { resources: [], pagination: {} }
+      setResources(response.data.resources || []);
     } catch (err) {
       setError('Failed to load resources');
     } finally {

@@ -47,7 +47,7 @@ const Dashboard = () => {
   ];
 
   return (
-    <div className="min-h-screen w-full flex bg-brand-bg dark:bg-zinc-950 transition-colors duration-300 overflow-hidden relative">
+    <div className="h-screen w-full flex bg-brand-bg dark:bg-zinc-950 transition-colors duration-300 overflow-hidden relative">
         {/* Sidebar */}
         <aside className="w-72 h-screen bg-white dark:bg-zinc-900 flex flex-col p-8 shrink-0 z-10 border-r border-gray-100 dark:border-zinc-800">
         <div className="flex items-center gap-3 mb-12 px-2">
@@ -95,7 +95,7 @@ const Dashboard = () => {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-grow flex flex-col bg-brand-bg dark:bg-zinc-950 h-full overflow-y-auto overflow-x-hidden">
+      <div className="flex-grow flex flex-col bg-brand-bg dark:bg-zinc-950 h-screen overflow-y-auto overflow-x-hidden">
         {/* Unified Top header */}
         <header className="flex items-center justify-between px-10 py-6 sticky top-0 z-20 bg-brand-bg/80 dark:bg-zinc-950/80 backdrop-blur-md">
           <div className="text-sm font-medium text-brand-lavender">
