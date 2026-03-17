@@ -85,7 +85,7 @@ const CalendarWidget = ({ activeDays = [] }) => {
               return (
                 <div key={date} className="relative flex justify-center items-center h-8">
                   <div className={`w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold transition-all
-                    ${isActive ? 'bg-[#4318FF] text-white shadow-lg shadow-brand-blue/30' : 
+                    ${isActive ? 'bg-[#1B2559] text-white shadow-lg shadow-brand-blue/30' : 
                       isPast ? 'text-gray-300 font-medium' : 'text-[#1B2559] hover:bg-gray-50 cursor-pointer'}
                   `}>
                     {date < 10 ? `0${date}` : date}
@@ -101,7 +101,7 @@ const CalendarWidget = ({ activeDays = [] }) => {
 
       <div className="grid grid-cols-2 gap-4 mt-8 pt-6 border-t border-gray-100">
         <div className="flex items-center gap-2 text-xs font-bold text-gray-500"><div className="w-2 h-2 rounded-full bg-[#05CD99]"></div> Booking ({activeDays.length})</div>
-        <div className="flex items-center gap-2 text-xs font-bold text-gray-500"><div className="w-2 h-2 rounded-full bg-[#4318FF]"></div> Today</div>
+        <div className="flex items-center gap-2 text-xs font-bold text-gray-500"><div className="w-2 h-2 rounded-full bg-[#1B2559]"></div> Today</div>
       </div>
     </div>
   );

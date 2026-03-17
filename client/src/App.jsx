@@ -4,6 +4,7 @@ import { useAuth } from './context/AuthContext';
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
 import Dashboard from './pages/Dashboard';
+import Profile from './pages/Profile.jsx';
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -24,6 +25,14 @@ function App() {
               <Dashboard />
             </ProtectedRoute>
           } 
+        />
+        <Route 
+          path="/profile" 
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
         />
         <Route path="/" element={<Navigate to="/login" />} />
       </Routes>

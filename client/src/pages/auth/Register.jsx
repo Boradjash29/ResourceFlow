@@ -31,9 +31,9 @@ const Register = () => {
 
     setIsLoading(true);
     const result = await register(formData.name, formData.email, formData.password);
-    
     if (result.success) {
-      navigate('/dashboard');
+      // Registration successful, redirect to login with a message
+      navigate('/login', { state: { message: 'Registration successful! Please log in.' } });
     } else {
       setError(result.message);
     }

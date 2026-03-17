@@ -19,18 +19,18 @@
     @apply px-6 py-2.5 rounded-2xl font-semibold transition-all duration-300 active:scale-95 text-sm flex items-center gap-2;
   }
   .btn-primary {
-    @apply bg-brand-blue text-white hover:shadow-premium shadow-soft dark:shadow-none;
+    @apply bg-brand-blue text-white hover:bg-[#11193F] transition-all;
   }
   .btn-secondary {
-    @apply bg-white border border-gray-100 text-brand-lavender hover:bg-gray-50 dark:bg-white/5 dark:border-white/5 dark:text-white dark:hover:bg-white/10;
+    @apply bg-white border border-gray-200 text-[#1B2559] hover:bg-gray-50 dark:bg-zinc-900 dark:border-white/10 dark:text-white dark:hover:bg-white/5;
   }
   
   .input-field {
-    @apply w-full px-4 py-3 border border-gray-100 bg-white rounded-2xl focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-zinc-600 text-sm dark:bg-zinc-950 dark:border-white/5 dark:text-white;
+    @apply w-full px-4 py-3 border border-gray-100 bg-white rounded-2xl focus:ring-2 focus:ring-brand-blue/10 focus:border-brand-blue outline-none transition-all placeholder:text-gray-300 dark:placeholder:text-zinc-600 text-sm dark:bg-zinc-950 dark:border-white/5 dark:text-white;
   }
   
   .card {
-    @apply bg-white rounded-3xl shadow-soft border border-white p-7 transition-all duration-300 dark:bg-zinc-900 dark:border-white/5 dark:shadow-none;
+    @apply bg-white rounded-3xl shadow-soft border border-gray-50 p-7 transition-all duration-300 dark:bg-zinc-900 dark:border-white/5 dark:shadow-none;
     @apply hover:shadow-premium;
   }
 
@@ -39,10 +39,10 @@
   }
 
   .sidebar-link {
-    @apply flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 font-medium text-brand-lavender hover:bg-brand-bg hover:text-brand-blue dark:hover:bg-zinc-900;
+    @apply flex items-center gap-3 px-4 py-3.5 rounded-2xl transition-all duration-300 font-medium text-white/60 hover:bg-white/5 hover:text-white;
   }
 
   .sidebar-link-active {
-    @apply bg-brand-bg text-brand-blue shadow-none font-bold dark:bg-zinc-900 dark:text-brand-blue;
+    @apply bg-white/10 text-white shadow-none font-bold;
   }
 }

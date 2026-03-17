@@ -27,7 +27,7 @@ const ProgressReportChart = ({ data = [], activeFilter = 'week', onFilterChange 
       
       <div className="flex gap-6 mb-8 text-sm font-bold text-[#1B2559]">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-[#4318FF]"></div>
+          <div className="w-2.5 h-2.5 rounded-full bg-[#1B2559]"></div>
           Resource Utilization
         </div>
         <div className="flex items-center gap-2">
@@ -58,10 +58,10 @@ const ProgressReportChart = ({ data = [], activeFilter = 'week', onFilterChange 
             <Line 
               type="monotone" 
               dataKey="utilized" 
-              stroke="#4318FF" 
+              stroke="#1B2559" 
               strokeWidth={3} 
               dot={false}
-              activeDot={{ r: 6, fill: '#4318FF', stroke: '#fff', strokeWidth: 2 }}
+              activeDot={{ r: 6, fill: '#1B2559', stroke: '#fff', strokeWidth: 2 }}
             />
             <Line 
               type="monotone" 
