@@ -14,6 +14,7 @@ export class ActionHandler {
     this.aiText = aiText;
     this.relevantResources = relevantResources;
     this.messages = messages;
+    this.memory = req.memory; // Injected by engine
     this.processedText = aiText;
   }
 
@@ -36,31 +37,52 @@ export class ActionHandler {
       
       // We use a while loop in case the AI emits multiple actions (though rare)
       while ((match = pattern.exec(this.aiText)) !== null) {
-        console.log(`[ActionHandler] Detected ${type}: ${match[0]}`);
-        
         try {
-          // 1. Permission Check
           if (!canPerformAction(this.user.role, type)) {
             const denial = getDenialMessage(type);
             this.processedText = this.processedText.replace(match[0], `\n\n❌ **Unauthorized**: ${denial}`).trim();
             continue;
           }
 
-          // 2. Parse Data
-          const actionData = JSON.parse(match[1]);
+          const actionData = this.tryLenientParse(match[1]);
+          if (!actionData) {
+            this.processedText = this.processedText.replace(match[0], `\n\n❌ **Syntax Error**: I couldn't understand the action parameters.`).trim();
+            continue;
+          }
+
+          const validationError = this.validateActionData(type, actionData);
+          if (validationError) {
+            this.processedText = this.processedText.replace(match[0], `\n\n❌ **Validation Failed**: ${validationError}`).trim();
+            continue;
+          }
           
-          // 3. Dispatch to specific logic
+          // Phase 3B: Mandatory confirmation for destructive actions
+          const isDestructive = ['CANCEL_BOOK_ACTION', 'DELETE_RESOURCE_ACTION'].includes(type);
+          const isConfirmed = this.req.body.messages.slice(-1)[0].content.trim().toUpperCase() === 'YES';
+
+          if (isDestructive && !isConfirmed) {
+            this.memory.setPendingAction(type, actionData);
+            const resourceName = actionData.resource_name || 'this resource';
+            this.processedText = this.processedText.replace(match[0], `⚠️ **Confirmation Required**: Are you sure you want to ${type === 'CANCEL_BOOK_ACTION' ? 'cancel the booking for' : 'delete'} ${resourceName}? Please say **YES** to proceed.`).trim();
+            continue;
+          }
+
           let resultMessage = "";
           switch (type) {
             case 'BOOK_ACTION':           resultMessage = await this.handleBook(actionData, match[0]); break;
             case 'UPDATE_BOOKING_ACTION': resultMessage = await this.handleUpdateBooking(actionData, match[0]); break;
-            case 'CANCEL_BOOK_ACTION':   resultMessage = await this.handleCancelBooking(actionData, match[0]); break;
+            case 'CANCEL_BOOK_ACTION':   
+              resultMessage = await this.handleCancelBooking(actionData, match[0]); 
+              this.memory.clearPendingAction();
+              break;
             case 'ADD_RESOURCE_ACTION':    resultMessage = await this.handleAddResource(actionData, match[0]); break;
             case 'UPDATE_RESOURCE_ACTION': resultMessage = await this.handleUpdateResource(actionData, match[0]); break;
-            case 'DELETE_RESOURCE_ACTION': resultMessage = await this.handleDeleteResource(actionData, match[0]); break;
+            case 'DELETE_RESOURCE_ACTION': 
+              resultMessage = await this.handleDeleteResource(actionData, match[0]); 
+              this.memory.clearPendingAction();
+              break;
           }
 
-          // 4. Update the final text returned to user
           this.processedText = this.processedText.replace(match[0], `\n\n${resultMessage}`).trim();
 
         } catch (err) {
@@ -70,11 +92,13 @@ export class ActionHandler {
       }
     }
 
-    // --- Final Sanitization: Ensure no raw UUIDs leak into the text ---
-    this.processedText = this.processedText.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ' [REDACTED] ');
-    
-    // Clean up any double spaces or tags the AI might have left
-    this.processedText = this.processedText.replace(/\[(RES|BOOK|USER)_ID:[^\]]+\]/gi, '').trim();
+    // Phase 6B: Comprehensive Response Sanitization
+    this.processedText = this.processedText
+      .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[ID_REDACTED]')
+      .replace(/\[[A-Z_]+_ACTION:.*?\]/gi, '') // residual tags
+      .replace(/\[(RES|BOOK|USER)_ID:[^\]]+\]/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
 
     return this.processedText;
   }
@@ -123,6 +147,9 @@ export class ActionHandler {
       resource_id: resourceId,
       participants: [] // We use description or count for now
     });
+
+    // Phase 4C: Feedback Loop
+    this.memory.entities.lastBookingCreated = { bookingId: booking.id, resourceId };
 
     await createAuditLog({
       userId: this.user.id,
@@ -205,6 +232,9 @@ export class ActionHandler {
       data: { status: 'cancelled', updated_at: new Date() },
       include: { resource: true }
     });
+
+    // Phase 4C: Feedback Loop
+    this.memory.entities.lastBookingCancelled = { bookingId: booking_id };
 
     await createAuditLog({
       userId: this.user.id,
@@ -305,8 +335,6 @@ export class ActionHandler {
   }
 
   async resolveResourceId(placeholder) {
-    console.log(`[ActionHandler] Resolving resource placeholder: "${placeholder}"`);
-    
     // 1. History scan
     const historyText = this.messages.slice(-5).map(m => m.content).join(' ') + ' ' + this.aiText;
     const matchInHistory = this.relevantResources.find(r => 
@@ -325,5 +353,34 @@ export class ActionHandler {
     }
 
     throw new Error(`Could not identify resource "${placeholder}". Please specify it clearly by name.`);
+  }
+
+  tryLenientParse(jsonString) {
+    try {
+      return JSON.parse(jsonString);
+    } catch (e) {
+      // Lenient fix: Add missing quotes to keys, handle trailing commas
+      let fixed = jsonString
+        .replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3') // quote keys
+        .replace(/,\s*([}\]])/g, '$1'); // remove trailing commas
+      try {
+        return JSON.parse(fixed);
+      } catch (e2) {
+        return null;
+      }
+    }
+  }
+
+  validateActionData(type, data) {
+    if (type === 'BOOK_ACTION' || type === 'UPDATE_BOOKING_ACTION') {
+      if (data.start_time && isNaN(Date.parse(data.start_time))) return "Invalid start time format.";
+      if (data.end_time && isNaN(Date.parse(data.end_time))) return "Invalid end time format.";
+      if (data.participant_count && (isNaN(data.participant_count) || data.participant_count < 1)) return "Participant count must be at least 1.";
+    }
+    if (type === 'ADD_RESOURCE_ACTION' || type === 'UPDATE_RESOURCE_ACTION') {
+      if (data.capacity && (isNaN(data.capacity) || data.capacity < 1)) return "Capacity must be a positive number.";
+      if (type === 'ADD_RESOURCE_ACTION' && (!data.name || !data.type)) return "Name and type are required for new resources.";
+    }
+    return null;
   }
 }

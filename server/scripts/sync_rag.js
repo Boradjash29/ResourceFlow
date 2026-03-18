@@ -1,3 +1,5 @@
+// STANDALONE SCRIPT — run manually: node sync_rag.js
+// Syncs resource embeddings to pgvector. Not auto-imported.
 import { syncAllResources } from '../rag/embeddings.js';
 import prisma from '../config/prisma.js';
 

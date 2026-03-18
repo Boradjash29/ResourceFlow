@@ -15,7 +15,7 @@ const UpcomingEventsBanner = ({ events = [] }) => {
         {/* Events Content */}
         <div className="flex flex-col justify-center gap-6 w-1/2 pr-6 border-r border-white/20">
           {events.length === 0 ? (
-            <div className="text-center opacity-80 py-4">
+            <div className="text-center py-4">
               <h4 className="font-bold text-lg mb-1">No upcoming events</h4>
               <p className="text-sm">You're all clear for now! Take a break.</p>
             </div>

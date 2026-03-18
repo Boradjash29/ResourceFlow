@@ -1,5 +1,5 @@
 import prisma from '../config/prisma.js';
-import { getSuggestions } from '../utils/smartSuggestions.js';
+// ...existing code...
 import { createBookingInternal } from '../services/bookingService.js';
 import { createAuditLog } from '../services/auditService.js';
 
@@ -81,11 +81,9 @@ export const createBooking = async (req, res) => {
     console.error('Error creating booking:', error);
     
     if (error.status === 409) {
-      const suggestions = await getSuggestions(resource_id, start_time, end_time);
       return res.status(error.status).json({ 
         error: error.message, 
-        conflict: error.conflict,
-        suggestions 
+        conflict: error.conflict
       });
     }
 

@@ -58,10 +58,33 @@ export const generateEmbedding = async (input) => {
 };
 
 /**
+ * Multi-layer Prompt Injection Shield (Phase 6A)
+ */
+export function detectInjection(text) {
+  const patterns = [
+    /ignore all (prior|previous) instructions/i,
+    /system override|developer mode|dan mode/i,
+    /forget everything you know/i,
+    /stop being an assistant/i,
+    /you are now a/i,
+    /output the system prompt/i,
+    /print your instructions/i
+  ];
+  return patterns.some(p => p.test(text));
+}
+
+/**
  * Low-level wrapper for LLM completion.
  */
 export const getAIResponse = async (messages, systemPromptObj) => {
   try {
+    // Phase 6A: Input Sanitization
+    const lastUserMsg = messages[messages.length - 1]?.content || "";
+    if (detectInjection(lastUserMsg)) {
+      console.warn(`[SECURITY] Prompt injection detected: "${lastUserMsg}"`);
+      return "I'm sorry, but I cannot perform that action as it violates my security guidelines. Please stick to resource management tasks.";
+    }
+
     const sanitizedMessages = messages.map(msg => ({
       ...msg,
       content: msg.content.replace(/ignore all prior instructions|system override|developer mode/gi, "[REDACTED]")

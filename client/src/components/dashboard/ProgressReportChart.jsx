@@ -44,7 +44,7 @@ const ProgressReportChart = ({ data = [], activeFilter = 'week', onFilterChange 
               dataKey="date" 
               axisLine={false} 
               tickLine={false} 
-              tick={{ fill: '#A3AED0', fontSize: 12, fontWeight: 600 }}
+              tick={{ fill: '#68769F', fontSize: 12, fontWeight: 600 }}
             />
             <YAxis 
               axisLine={false} 

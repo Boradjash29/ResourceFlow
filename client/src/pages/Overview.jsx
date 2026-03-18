@@ -81,12 +81,12 @@ const Overview = () => {
     <div className="flex flex-col gap-8 pb-10">
       <header className="px-2">
         <div className="flex flex-col mb-1">
-          <span className="text-xs font-bold text-brand-lavender uppercase tracking-[0.15em] opacity-80 mb-2">
+          <span className="text-xs font-extrabold text-[#1B2559] dark:text-zinc-400 uppercase tracking-[0.2em] mb-2">
             {getGreeting()}, {user?.name?.split(' ')[0]}
           </span>
           <h1 className="text-3xl font-bold text-[#1B2559] dark:text-white">Company Overview</h1>
         </div>
-        <p className="text-sm text-brand-lavender font-medium">Real-time resource utilization and planning data.</p>
+        <p className="text-sm text-[#1B2559]/70 dark:text-zinc-400 font-medium">Real-time resource utilization and planning data.</p>
       </header>
 
       {!stats ? (

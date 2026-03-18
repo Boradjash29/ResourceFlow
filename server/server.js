@@ -25,7 +25,6 @@ const limiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Middleware
 app.use(limiter);
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
@@ -34,7 +33,6 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -47,7 +45,6 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'ResourceFlow API is running' });
 });
 
-// Global Error Handling Middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.status || 500).json({

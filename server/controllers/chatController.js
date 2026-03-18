@@ -1,16 +1,25 @@
 import { RAGEngine } from '../rag/engine.js';
 import { syncAllResources } from '../rag/embeddings.js';
+import { ConversationMemory } from '../rag/memory.js';
+
+// Session Memory Store (Phase 2C)
+const sessionMemory = new Map();
 
 /**
  * Refactored chat controller. 
- * Heavy logic moved to Discrete RAG Engine (server/rag/engine.js).
  */
 export const handleAssistantChat = async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, sessionId = 'default' } = req.body;
     
+    // Get or create session memory
+    if (!sessionMemory.has(sessionId)) {
+      sessionMemory.set(sessionId, new ConversationMemory());
+    }
+    const memory = sessionMemory.get(sessionId);
+
     // Delegate to RAG Engine
-    const engine = new RAGEngine(req, messages);
+    const engine = new RAGEngine(req, messages, memory);
     const result = await engine.process();
 
     res.status(200).json(result);

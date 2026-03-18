@@ -7,7 +7,7 @@ const StatsCard = ({ title, value, icon: Icon, colorClass }) => (
       <Icon className="w-7 h-7" />
     </div>
     <div>
-      <p className="text-sm font-bold text-brand-lavender mb-1 uppercase tracking-wider">{title}</p>
+      <p className="text-sm font-extrabold text-[#1B2559]/60 dark:text-zinc-400 mb-1 uppercase tracking-wider">{title}</p>
       <p className="text-2xl font-extrabold text-[#1B2559] dark:text-white">{value}</p>
     </div>
   </div>
