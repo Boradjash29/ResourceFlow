@@ -1,41 +1,44 @@
 import prisma from '../config/prisma.js';
 
 /**
- * Creates an audit log entry in the database.
- * @param {Object} params - The log details.
- * @param {string} params.userId - The ID of the user performing the action.
- * @param {string} params.action - The type of action (e.g., 'CREATE', 'UPDATE', 'DELETE', 'LOGIN').
- * @param {string} params.entityType - The type of entity affected (e.g., 'resource', 'booking', 'user').
- * @param {string} [params.entityId] - The ID of the affected entity.
- * @param {Object} [params.details] - Additional contextual details.
- * @param {string} [params.ipAddress] - IP address of the user.
- * @param {string} [params.userAgent] - User agent string.
+ * Logs a security or system event to the AuditLog table.
+ * @param {Object} params
+ * @param {string} params.userId - The ID of the user performing the action (optional)
+ * @param {string} params.action - The action performed (e.g., 'LOGIN', 'PASSWORD_RESET')
+ * @param {string} params.entityType - The type of entity affected (e.g., 'USER', 'SESSION', '2FA')
+ * @param {string} params.entityId - The ID of the entity affected (optional)
+ * @param {Object} params.details - Additional metadata for the event (optional)
+ * @param {Object} params.req - The Express request object to extract IP and User Agent (optional)
  */
-export const createAuditLog = async ({
-  userId,
-  action,
-  entityType,
-  entityId,
-  details = {},
-  ipAddress,
-  userAgent
+/**
+ * Logs a security or system event to the AuditLog table.
+ * Supports both passing the 'req' object or explicit 'ipAddress' and 'userAgent'.
+ */
+export const logEvent = async ({ 
+  userId, 
+  action, 
+  entityType, 
+  entityId, 
+  details, 
+  req, 
+  ipAddress, 
+  userAgent 
 }) => {
   try {
-    const log = await prisma.auditLog.create({
+    await prisma.auditLog.create({
       data: {
-        user_id: userId,
+        user_id: userId || null,
         action,
         entity_type: entityType,
-        entity_id: entityId,
-        details,
-        ip_address: ipAddress,
-        user_agent: userAgent
-      }
+        entity_id: entityId || null,
+        details: details || {},
+        ip_address: ipAddress || (req ? req.ip : null),
+        user_agent: userAgent || (req ? req.headers['user-agent'] : null),
+      },
     });
-    return log;
   } catch (error) {
-    console.error('Failed to create audit log:', error);
-    // Don't throw error to avoid breaking main application flow
-    return null;
+    console.error(`Audit Log Error [Action: ${action}, User: ${userId}]:`, error);
   }
 };
+
+export const createAuditLog = logEvent;

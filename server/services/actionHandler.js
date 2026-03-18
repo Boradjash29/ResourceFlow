@@ -56,12 +56,17 @@ export class ActionHandler {
             continue;
           }
           
-          // Phase 3B: Mandatory confirmation for destructive actions
+          // Bug 3: Strict Mandatory confirmation for destructive actions
           const isDestructive = ['CANCEL_BOOK_ACTION', 'DELETE_RESOURCE_ACTION'].includes(type);
-          const isConfirmed = this.req.body.messages.slice(-1)[0].content.trim().toUpperCase() === 'YES';
+          const pending = this.memory.getPendingAction();
+          const lastUserMsg = this.req.body.messages.slice(-1)[0].content.trim().toUpperCase();
+          const isConfirmed = lastUserMsg === 'YES' && pending && pending.type === type;
 
           if (isDestructive && !isConfirmed) {
-            this.memory.setPendingAction(type, actionData);
+            // Use uuid as unique actionId if available
+            const actionId = actionData.resource_id || actionData.booking_id || Math.random().toString(36).substring(7);
+            this.memory.setPendingAction(type, { ...actionData, actionId });
+            
             const resourceName = actionData.resource_name || 'this resource';
             this.processedText = this.processedText.replace(match[0], `⚠️ **Confirmation Required**: Are you sure you want to ${type === 'CANCEL_BOOK_ACTION' ? 'cancel the booking for' : 'delete'} ${resourceName}? Please say **YES** to proceed.`).trim();
             continue;

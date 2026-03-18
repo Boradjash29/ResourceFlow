@@ -3,14 +3,14 @@ import api from '../../lib/api';
 import { 
   Plus, 
   Edit2, 
-  Trash2, 
-  Settings, 
+  Trash2,   Settings, 
   Search, 
   Filter, 
   Loader2, 
   CheckCircle2, 
   AlertCircle 
 } from 'lucide-react';
+import { motion } from 'framer-motion';
 import ResourceModal from '../../components/admin/ResourceModal';
 
 const AdminResources = () => {
@@ -19,6 +19,18 @@ const AdminResources = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingResource, setEditingResource] = useState(null);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+
+  // Clear notifications after 3 seconds
+  useEffect(() => {
+    if (error || success) {
+      const timer = setTimeout(() => {
+        setError(null);
+        setSuccess(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [error, success]);
 
   const fetchResources = async () => {
     try {
@@ -45,9 +57,10 @@ const AdminResources = () => {
       }
       setModalOpen(false);
       setEditingResource(null);
-      fetchResources();
+      await fetchResources();
+      setSuccess(`Resource ${editingResource ? 'updated' : 'created'} successfully`);
     } catch (err) {
-      alert(err.response?.data?.message || 'Error saving resource');
+      setError(err.response?.data?.message || 'Error saving resource');
     }
   };
 
@@ -55,9 +68,10 @@ const AdminResources = () => {
     if (!window.confirm('Are you sure you want to delete this resource?')) return;
     try {
       await api.delete(`/resources/${id}`);
-      fetchResources();
+      await fetchResources();
+      setSuccess('Resource deleted successfully');
     } catch (err) {
-      alert(err.response?.data?.message || 'Error deleting resource');
+      setError(err.response?.data?.message || 'Error deleting resource');
     }
   };
 
@@ -88,6 +102,28 @@ const AdminResources = () => {
             Add Resource
           </button>
         </header>
+
+        {error && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl flex items-center gap-3"
+          >
+            <AlertCircle className="w-5 h-5" />
+            <span className="text-sm font-bold">{error}</span>
+          </motion.div>
+        )}
+
+        {success && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            className="mb-6 p-4 bg-green-50 border border-green-100 text-green-600 rounded-2xl flex items-center gap-3"
+          >
+            <CheckCircle2 className="w-5 h-5" />
+            <span className="text-sm font-bold">{success}</span>
+          </motion.div>
+        )}
 
         <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/50 border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">

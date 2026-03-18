@@ -69,6 +69,8 @@ export class ConversationMemory {
     if (typeof userMessage !== 'string') return userMessage;
     
     let resolved = userMessage;
+    // Bug 8: Defined inside function for thread-safety and fresh lastIndex.
+    // 'g' is needed because a user might say "Cancel it and that one"
     const itRefs = /\b(it|that one|this one|the same|that room|that vehicle|the resource)\b/gi;
 
     if (itRefs.test(userMessage) && this.entities.lastMentionedResource) {

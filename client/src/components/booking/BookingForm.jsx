@@ -1,6 +1,17 @@
-import React, { useState } from 'react';
-import { X, Calendar, Clock, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Calendar, Clock, AlertCircle, CheckCircle, Loader2, Info, Repeat } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { z } from 'zod';
 import api from '../../lib/api';
+
+const bookingSchema = z.object({
+  meeting_title: z.string().min(3, 'Title must be at least 3 characters').max(100),
+  description: z.string().max(500).optional(),
+  date: z.string().min(1, 'Date is required'),
+  startTime: z.string().min(1, 'Time is required'),
+  duration: z.string().min(1, 'Duration is required'),
+  participants: z.string().optional(),
+});
 
 const BookingForm = ({ resource, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -9,17 +20,63 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
     date: new Date().toISOString().split('T')[0],
     startTime: '09:00',
     duration: '60',
-    participants: ''
+    participants: '',
+    recurrence_rule: 'NONE'
   });
   
   const [isLoading, setIsLoading] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
+  const [availability, setAvailability] = useState({ available: true, conflicts: [] });
   const [error, setError] = useState(null);
+  const [errors, setErrors] = useState({});
   const [suggestions, setSuggestions] = useState([]);
+
+  const checkAvailability = useCallback(async (data) => {
+    if (!data.date || !data.startTime || !data.duration) return;
+    
+    setIsChecking(true);
+    try {
+      const startDateTime = new Date(`${data.date}T${data.startTime}`);
+      const endDateTime = new Date(startDateTime.getTime() + parseInt(data.duration) * 60000);
+      
+      const response = await api.get('/bookings/check-availability', {
+        params: {
+          resource_id: resource.id,
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString()
+        }
+      });
+      setAvailability(response.data);
+    } catch (err) {
+      console.error('Availability check failed');
+    } finally {
+      setIsChecking(false);
+    }
+  }, [resource.id]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkAvailability(formData);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [formData.date, formData.startTime, formData.duration, checkAvailability]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+    setErrors({});
     setSuggestions([]);
+
+    const validation = bookingSchema.safeParse(formData);
+    if (!validation.success) {
+      const fieldErrors = {};
+      validation.error.errors.forEach(err => {
+        fieldErrors[err.path[0]] = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
     setIsLoading(true);
 
     const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
@@ -36,13 +93,17 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
 
     try {
       await api.post('/bookings', bookingData);
+      toast.success('Booking confirmed!');
       onSuccess();
     } catch (err) {
       if (err.response?.status === 409) {
         setError(err.response.data.error);
         setSuggestions(err.response.data.suggestions || []);
+        toast.error('Schedule conflict detected');
       } else {
-        setError(err.response?.data?.message || 'Failed to create booking');
+        // Global interceptor will handle non-409 errors with toasts,
+        // but we can add a local one if we want specific phrasing
+        toast.error(err.response?.data?.message || 'Failed to create booking');
       }
     } finally {
       setIsLoading(false);
@@ -100,11 +161,12 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
             <input 
               required
               type="text" 
-              className="input-field" 
+              className={`input-field ${errors.meeting_title ? 'border-red-500' : ''}`}
               placeholder="e.g. Quarterly Sync"
               value={formData.meeting_title}
               onChange={(e) => setFormData({...formData, meeting_title: e.target.value})}
             />
+            {errors.meeting_title && <p className="text-xs text-red-500 mt-1">{errors.meeting_title}</p>}
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -115,10 +177,12 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
               <input 
                 required
                 type="date" 
-                className="input-field"
+                min={new Date().toISOString().split('T')[0]}
+                className={`input-field ${errors.date ? 'border-red-500' : ''}`}
                 value={formData.date}
                 onChange={(e) => setFormData({...formData, date: e.target.value})}
               />
+              {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
@@ -127,10 +191,12 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
               <input 
                 required
                 type="time" 
-                className="input-field"
+                step="1800"
+                className={`input-field ${errors.startTime ? 'border-red-500' : ''}`}
                 value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
               />
+              {errors.startTime && <p className="text-xs text-red-500 mt-1">{errors.startTime}</p>}
             </div>
           </div>
 
@@ -150,6 +216,46 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
             </select>
           </div>
 
+          <div className="space-y-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+              <Repeat className="w-3 h-3 text-brand-blue" /> Recurrence
+            </label>
+            <div className="grid grid-cols-4 gap-2">
+              {['NONE', 'DAILY', 'WEEKLY', 'MONTHLY'].map((rule) => (
+                <button
+                  key={rule}
+                  type="button"
+                  onClick={() => setFormData({ ...formData, recurrence_rule: rule })}
+                  className={`py-2 px-1 text-[10px] font-bold rounded-xl border transition-all ${
+                    formData.recurrence_rule === rule
+                      ? 'bg-brand-blue text-white border-brand-blue'
+                      : 'bg-white dark:bg-zinc-900 text-brand-lavender border-gray-100 dark:border-white/5 hover:border-brand-blue/30'
+                  }`}
+                >
+                  {rule === 'NONE' ? 'One-time' : rule}
+                </button>
+              ))}
+            </div>
+            {formData.recurrence_rule !== 'NONE' && (
+              <p className="text-[10px] text-brand-lavender italic">
+                * This will create a series of bookings.
+              </p>
+            )}
+          </div>
+
+          {!availability.available && (
+            <div className="bg-amber-50 border border-amber-100 p-3 rounded-xl flex items-center gap-3 text-amber-700 text-xs">
+              <Info className="w-4 h-4 shrink-0" />
+              <p>This slot is currently occupied. Please choose another time.</p>
+            </div>
+          )}
+
+          {isChecking && (
+            <div className="flex items-center gap-2 text-[10px] text-brand-lavender italic">
+              <Loader2 className="w-3 h-3 animate-spin" /> Checking availability...
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Participants (comma separated emails)</label>
             <input 
@@ -159,6 +265,7 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
               value={formData.participants}
               onChange={(e) => setFormData({...formData, participants: e.target.value})}
             />
+            <p className="text-[10px] text-brand-lavender mt-1">Separate multiple emails with commas.</p>
           </div>
 
           <div className="flex gap-3 pt-4">
@@ -171,8 +278,8 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
             </button>
             <button 
               type="submit" 
-              disabled={isLoading}
-              className="btn btn-primary flex-grow flex items-center justify-center gap-2"
+              disabled={isLoading || isChecking || !availability.available}
+              className="btn btn-primary flex-grow flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />

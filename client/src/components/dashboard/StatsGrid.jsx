@@ -37,7 +37,7 @@ const StatsGrid = ({ stats }) => {
       />
       <StatsCard 
         title="Available Rooms" 
-        value={stats.availableResources} 
+        value={stats.availableResources ?? 0} 
         icon={CheckCircle} 
         colorClass="bg-emerald-50 text-emerald-600" 
       />

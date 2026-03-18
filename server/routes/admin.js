@@ -1,14 +1,11 @@
 import express from 'express';
-import { getAuditLogs, getAllBookings } from '../controllers/adminController.js';
+import { getAuditLogs } from '../controllers/adminController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { roleMiddleware } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
-router.use(authMiddleware);
-router.use(roleMiddleware(['admin']));
-
-router.get('/audit-logs', getAuditLogs);
-router.get('/bookings', getAllBookings);
+// Only Admins can see Audit Logs
+router.get('/audit-logs', authMiddleware, roleMiddleware(['admin']), getAuditLogs);
 
 export default router;

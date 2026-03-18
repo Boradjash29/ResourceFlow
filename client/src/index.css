@@ -16,7 +16,7 @@
 
 @layer components {
   .btn {
-    @apply px-6 py-2.5 rounded-2xl font-semibold transition-all duration-300 active:scale-95 text-sm flex items-center gap-2;
+    @apply px-6 py-2.5 min-h-[44px] rounded-2xl font-semibold transition-all duration-300 active:scale-95 text-sm flex items-center justify-center gap-2;
   }
   .btn-primary {
     @apply bg-brand-blue text-white hover:bg-[#11193F] transition-all;

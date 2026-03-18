@@ -8,6 +8,7 @@ import { Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 const Overview = () => {
+  console.log('Overview rendering...');
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
   const [utilization, setUtilization] = useState([]);
@@ -82,7 +83,7 @@ const Overview = () => {
       <header className="px-2">
         <div className="flex flex-col mb-1">
           <span className="text-xs font-extrabold text-[#1B2559] dark:text-zinc-400 uppercase tracking-[0.2em] mb-2">
-            {getGreeting()}, {user?.name?.split(' ')[0]}
+            {getGreeting()}, {(user?.name || 'User').split(' ')[0]}
           </span>
           <h1 className="text-3xl font-bold text-[#1B2559] dark:text-white">Company Overview</h1>
         </div>

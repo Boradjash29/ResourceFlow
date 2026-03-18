@@ -12,11 +12,20 @@ const getCachedData = (key) => {
   return null;
 };
 
+const MAX_CACHE_SIZE = 100;
+
 const setCachedData = (key, data) => {
+  if (analyticsCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = analyticsCache.keys().next().value;
+    analyticsCache.delete(firstKey);
+  }
   analyticsCache.set(key, { data, timestamp: Date.now() });
 };
 
 export const getDashboardStats = async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden: Analytics are restricted to administrators.' });
+  }
   try {
     const [
       totalResources,
@@ -41,8 +50,10 @@ export const getDashboardStats = async (req, res) => {
           bookings: {
             none: {
               status: 'confirmed',
-              start_time: { lte: new Date() },
-              end_time: { gte: new Date() }
+              OR: [
+                { start_time: { lte: new Date(), gte: new Date(new Date().setHours(0,0,0,0)) } },
+                { end_time: { gte: new Date(), lte: new Date(new Date().setHours(23,59,59,999)) } }
+              ]
             }
           }
         }
@@ -62,6 +73,9 @@ export const getDashboardStats = async (req, res) => {
 };
 
 export const getUtilizationData = async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
   try {
     const { filter = 'week' } = req.query;
     const cacheKey = `utilization:${filter}`;
@@ -134,6 +148,9 @@ export const getUtilizationData = async (req, res) => {
 };
 
 export const getPopularResources = async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Forbidden' });
+  }
   try {
     const result = await prisma.resource.findMany({
       select: {
@@ -221,19 +238,30 @@ export const getCalendarData = async (req, res) => {
     // Just get all active bookings for this month
     const currentDate = new Date();
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
     
-    whereClause.start_time = { gte: startOfMonth, lte: endOfMonth };
+    // Improved cross-month logic: find any booking that OVERLAPS with this month
+    whereClause.AND = [
+      { start_time: { lte: endOfMonth } },
+      { end_time: { gte: startOfMonth } }
+    ];
 
     const bookings = await prisma.booking.findMany({
       where: whereClause,
-      select: { start_time: true }
+      select: { start_time: true, end_time: true }
     });
     
-    // Map to array of day numbers that have bookings
-    const daysWithBookings = [...new Set(bookings.map(b => b.start_time.getDate()))];
-    
-    res.status(200).json(daysWithBookings);
+    const daysWithBookings = new Set();
+    bookings.forEach(b => {
+      let current = new Date(Math.max(b.start_time, startOfMonth));
+      const end = new Date(Math.min(b.end_time, endOfMonth));
+      while (current <= end) {
+        daysWithBookings.add(current.getDate());
+        current.setDate(current.getDate() + 1);
+      }
+    });
+
+    res.status(200).json(Array.from(daysWithBookings));
   } catch (error) {
     console.error('Error fetching calendar data:', error);
     res.status(500).json({ message: 'Internal server error' });

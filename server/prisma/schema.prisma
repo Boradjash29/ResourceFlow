@@ -6,21 +6,32 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [vector, uuidOssp(map: "uuid-ossp"), btree_gist]
+  extensions = [btree_gist, uuid_ossp(map: "uuid-ossp"), vector]
 }
 
 model User {
-  id            String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  name          String         @db.VarChar(100)
-  email         String         @unique @db.VarChar(255)
-  password_hash String         @db.VarChar(255)
-  role          String         @db.VarChar(20)
-  status        String         @default("active") @db.VarChar(20)
-  created_at    DateTime?      @default(now()) @db.Timestamp(6)
-  updated_at    DateTime?      @default(now()) @db.Timestamp(6)
-  bookings      Booking[]
-  notifications Notification[]
-  audit_logs    AuditLog[]
+  id                    String               @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name                  String               @db.VarChar(100)
+  email                 String               @unique @db.VarChar(255)
+  password_hash         String               @db.VarChar(255)
+  role                  String               @db.VarChar(20)
+  status                String               @default("active") @db.VarChar(20)
+  created_at            DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?            @default(now()) @db.Timestamp(6)
+  failed_login_attempts Int                  @default(0)
+  is_verified           Boolean              @default(false)
+  locked_until          DateTime?            @db.Timestamp(6)
+  two_factor_enabled    Boolean              @default(false)
+  two_factor_secret     String?              @db.VarChar(255)
+  avatar_url            String?              @db.VarChar(255)
+  audit_logs            AuditLog[]
+  bookings              Booking[]
+  notifications         Notification[]
+  password_reset_tokens         PasswordResetToken[]
+  sessions                      Session[]
+  google_calendar_access_token  String?              @db.Text
+  google_calendar_refresh_token String?              @db.Text
+  google_calendar_expiry        DateTime?            @db.Timestamp(6)
 
   @@map("users")
 }
@@ -52,25 +63,27 @@ model Booking {
   description   String?
   participants  Json?     @default("[]")
   status        String?   @default("pending") @db.VarChar(20)
-  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  reminder_sent Boolean   @default(false)
+  recurrence_rule String? @db.VarChar(255)
+  series_id       String? @db.Uuid
+  external_event_id String? @db.VarChar(255)
+  created_at      DateTime? @default(now()) @db.Timestamp(6)
   updated_at    DateTime? @default(now()) @db.Timestamp(6)
-
-  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  resource Resource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  resource      Resource  @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("bookings")
 }
 
 model Embedding {
-  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  resource_id      String    @db.Uuid
+  id               String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  resource_id      String                 @db.Uuid
   content          String
-  embedding_vector Unsupported("vector(1536)")?
+  embedding_vector Unsupported("vector")?
   metadata         Json?
-  created_at       DateTime? @default(now()) @db.Timestamp(6)
-  updated_at       DateTime? @default(now()) @db.Timestamp(6)
-
-  resource Resource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  created_at       DateTime?              @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?              @default(now()) @db.Timestamp(6)
+  resource         Resource               @relation(fields: [resource_id], references: [id], onDelete: Cascade)
 
   @@map("embeddings")
 }
@@ -84,8 +97,7 @@ model Notification {
   link       String?   @db.VarChar(255)
   is_read    Boolean?  @default(false)
   created_at DateTime? @default(now()) @db.Timestamp(6)
-
-  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
@@ -100,8 +112,31 @@ model AuditLog {
   ip_address  String?   @db.VarChar(45)
   user_agent  String?
   created_at  DateTime? @default(now()) @db.Timestamp(6)
-
-  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+  user        User?     @relation(fields: [user_id], references: [id])
 
   @@map("audit_logs")
+}
+
+model Session {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id       String   @db.Uuid
+  refresh_token String   @unique @db.VarChar(512)
+  ip_address    String?  @db.VarChar(45)
+  user_agent    String?
+  expires_at    DateTime @db.Timestamp(6)
+  created_at    DateTime @default(now()) @db.Timestamp(6)
+  user          User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  token      String   @unique @db.VarChar(255)
+  expires_at DateTime @db.Timestamp(6)
+  used       Boolean  @default(false)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
 }

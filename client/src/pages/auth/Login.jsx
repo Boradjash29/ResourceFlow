@@ -1,46 +1,78 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LogIn, Loader2, Package, Calendar, Users, TrendingUp } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { LogIn, Loader2, Package, Calendar, Users, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { z } from 'zod';
+
+const loginSchema = z.object({
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.message) {
+      toast.success(location.state.message);
+      // Clear location state to prevent toast on re-render
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location.state, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-    setIsLoading(true);
-
-    const result = await login(email, password);
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.message);
+    setErrors({});
+    
+    // Client-side validation
+    const validation = loginSchema.safeParse({ email, password });
+    if (!validation.success) {
+      const fieldErrors = {};
+      validation.error.errors.forEach(err => {
+        fieldErrors[err.path[0]] = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
     }
-    setIsLoading(false);
+
+    setIsLoading(true);
+    try {
+      const result = await login(email, password);
+      if (result.success) {
+        toast.success('Welcome back!');
+        navigate('/dashboard');
+      } else if (result.requires2FA) {
+        navigate('/login/2fa', { state: { tempToken: result.tempToken } });
+      } else {
+        toast.error(result.message);
+      }
+    } catch {
+      toast.error('Connection failed. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen flex bg-white font-sans antialiased">
       {/* Left Side: Visual/Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#0C1227] relative overflow-hidden items-center justify-center p-12">
-        {/* Abstract Background elements */}
         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-brand-blue/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl"></div>
 
         <div className="relative z-10 w-full max-w-md">
-          {/* Floating Card Mock 1 */}
           <motion.div 
             initial={{ opacity: 0, y: 40, rotate: -2 }}
             animate={{ opacity: 1, y: 0, rotate: -2 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
             className="bg-white/10 backdrop-blur-xl border border-white/10 rounded-3xl p-6 mb-6 shadow-2xl relative left-[-20px] top-0"
           >
             <div className="flex items-center gap-4 mb-4">
@@ -57,11 +89,9 @@ const Login = () => {
             </div>
           </motion.div>
 
-          {/* Floating Card Mock 2 (Primary focus) */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 1, delay: 0.4 }}
             className="bg-white rounded-[40px] p-8 shadow-2xl relative z-20 border border-white/20"
           >
             <div className="flex justify-between items-start mb-8">
@@ -72,34 +102,8 @@ const Login = () => {
                 Live Status
               </div>
             </div>
-            
             <h2 className="text-2xl font-extrabold text-[#1B2559] mb-2 leading-tight">Effortless Resource Management</h2>
             <p className="text-brand-lavender text-sm font-medium mb-6">Seamlessly book and manage office assets in real-time with full visibility.</p>
-            
-            <div className="space-y-3">
-              {[1, 2].map((i) => (
-                <div key={i} className="flex items-center justify-between p-4 bg-brand-bg/60 rounded-3xl border border-white">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xs font-bold text-brand-blue border border-gray-100">JD</div>
-                    <span className="text-xs font-bold text-[#1B2559]">John's Meeting Room {i}</span>
-                  </div>
-                  <Users className="w-4 h-4 text-brand-lavender" />
-                </div>
-              ))}
-            </div>
-          </motion.div>
-
-          {/* Bottom small float */}
-          <motion.div 
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.6 }}
-            className="mt-6 flex gap-4"
-          >
-             <div className="bg-white/10 backdrop-blur-md px-5 py-4 rounded-3xl border border-white/10 flex items-center gap-3">
-                <TrendingUp className="text-success w-5 h-5" />
-                <span className="text-white text-xs font-bold font-sans">98% Utilization Rate</span>
-             </div>
           </motion.div>
         </div>
       </div>
@@ -118,52 +122,47 @@ const Login = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {error && (
-              <motion.div 
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="bg-red-50 text-danger p-4 rounded-2xl text-xs font-bold border border-red-100 flex items-center gap-2"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-danger"></div>
-                {error}
-              </motion.div>
-            )}
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1B2559] ml-1">Email<span className="text-brand-blue ml-0.5">*</span></label>
+              <label className="text-sm font-bold text-[#1B2559] ml-1">Email <span className="text-brand-blue">*</span></label>
               <input 
                 type="email" 
                 required 
-                className="input-field py-4"
+                className={`input-field py-4 ${errors.email ? 'border-red-500 bg-red-50/30' : ''}`}
                 placeholder="mail@website.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              {errors.email && <p className="text-xs font-bold text-red-500 mt-1 ml-1">{errors.email}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-bold text-[#1B2559] ml-1">Password<span className="text-brand-blue ml-0.5">*</span></label>
+              <label className="text-sm font-bold text-[#1B2559] ml-1">Password <span className="text-brand-blue">*</span></label>
               <input 
                 type="password" 
                 required 
-                className="input-field py-4"
+                className={`input-field py-4 ${errors.password ? 'border-red-500 bg-red-50/30' : ''}`}
                 placeholder="Min. 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
+              {errors.password && <p className="text-xs font-bold text-red-500 mt-1 ml-1">{errors.password}</p>}
+              <div className="flex justify-end">
+                <Link to="/forgot-password" className="text-xs font-bold text-brand-blue hover:underline">
+                  Forgot Password?
+                </Link>
+              </div>
             </div>
 
             <button 
               type="submit" 
               disabled={isLoading}
-              className="btn-primary w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-extrabold mt-8 hover:transform hover:-translate-y-0.5 transition-all shadow-lg"
+              className="btn-primary w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-extrabold mt-8 hover:transform hover:-translate-y-0.5 transition-all shadow-lg active:scale-[0.98]"
             >
               {isLoading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
               ) : (
-                <>
-                  Sign In
-                </>
+                'Sign In'
               )}
             </button>
           </form>

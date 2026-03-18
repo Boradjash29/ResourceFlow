@@ -1,8 +1,20 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { UserPlus, Loader2, ShieldCheck, Globe, Zap, Mail, User, Lock } from 'lucide-react';
+import { UserPlus, Loader2, ShieldCheck, Globe, Zap, Mail, User, Lock, AlertCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { z } from 'zod';
+
+const registerSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -11,8 +23,8 @@ const Register = () => {
     password: '',
     confirmPassword: ''
   });
-  const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState({});
   
   const { register } = useAuth();
   const navigate = useNavigate();
@@ -23,36 +35,50 @@ const Register = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setErrors({});
 
-    if (formData.password !== formData.confirmPassword) {
-      return setError('Passwords do not match');
+    const validation = registerSchema.safeParse(formData);
+    if (!validation.success) {
+      const fieldErrors = {};
+      validation.error.errors.forEach(err => {
+        fieldErrors[err.path[0]] = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
     }
 
     setIsLoading(true);
-    const result = await register(formData.name, formData.email, formData.password);
-    if (result.success) {
-      // Registration successful, redirect to login with a message
-      navigate('/login', { state: { message: 'Registration successful! Please log in.' } });
-    } else {
-      setError(result.message);
+    try {
+      const result = await register(formData.name, formData.email, formData.password);
+      if (result.success) {
+        navigate('/login', { 
+          state: { 
+            message: 'Registration successful! Verification email sent. Please check your inbox.',
+            type: 'success'
+          } 
+        });
+      } else {
+        toast.error(result.message || 'Registration failed');
+      }
+    } catch {
+      toast.error('A network error occurred. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (
     <div className="min-h-screen flex bg-white font-sans antialiased">
-      {/* Left Side: Visual/Branding (Consistent with Login) */}
+      {/* Left Side: Visual/Branding */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#0C1227] relative overflow-hidden items-center justify-center p-12">
         <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-brand-blue/10 rounded-full blur-3xl"></div>
         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-purple-500/10 rounded-full blur-3xl"></div>
 
         <div className="relative z-10 w-full max-w-md">
-          {/* Visual Identity for Registration */}
           <motion.div 
             initial={{ opacity: 0, scale: 0.8, y: 30 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 1 }}
+            transition={{ duration: 0.8 }}
             className="bg-white rounded-[40px] p-10 shadow-3xl border border-white/20"
           >
             <div className="flex gap-4 mb-8">
@@ -84,7 +110,6 @@ const Register = () => {
             </div>
           </motion.div>
 
-          {/* Abstract small cards */}
           <div className="absolute bottom-[-40px] right-[-40px] w-48 h-48 bg-brand-blue/5 rounded-full blur-2xl -z-10"></div>
         </div>
       </div>
@@ -99,15 +124,10 @@ const Register = () => {
           <div className="mb-8 text-center lg:text-left">
             <h1 className="text-sm font-extrabold text-brand-blue uppercase tracking-[0.2em] mb-4">Create Account</h1>
             <h2 className="text-4xl font-extrabold text-[#1B2559] tracking-tight mb-3">Welcome to Flow</h2>
-            <p className="text-brand-lavender font-medium">Join us and start managing your workspace efficiently.</p>
+            <p className="text-brand-lavender font-medium text-lg">Join us and start managing your workspace efficiently.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && (
-              <div className="bg-red-50 text-danger p-4 rounded-2xl text-xs font-bold border border-red-100 animate-in fade-in slide-in-from-top-1">
-                {error}
-              </div>
-            )}
 
             <div className="space-y-2">
               <label className="text-sm font-bold text-[#1B2559] ml-1 flex items-center gap-2">
@@ -117,11 +137,12 @@ const Register = () => {
                 name="name"
                 type="text" 
                 required 
-                className="input-field py-4"
+                className={`input-field py-4 ${errors.name ? 'border-red-500 bg-red-50/30' : ''}`}
                 placeholder="John Davis"
                 value={formData.name}
                 onChange={handleChange}
               />
+              {errors.name && <p className="text-xs font-bold text-red-500 mt-1 ml-1">{errors.name}</p>}
             </div>
 
             <div className="space-y-2">
@@ -132,11 +153,12 @@ const Register = () => {
                 name="email"
                 type="email" 
                 required 
-                className="input-field py-4"
+                className={`input-field py-4 ${errors.email ? 'border-red-500 bg-red-50/30' : ''}`}
                 placeholder="john@company.com"
                 value={formData.email}
                 onChange={handleChange}
               />
+              {errors.email && <p className="text-xs font-bold text-red-500 mt-1 ml-1">{errors.email}</p>}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -148,11 +170,12 @@ const Register = () => {
                   name="password"
                   type="password" 
                   required 
-                  className="input-field py-4"
+                  className={`input-field py-4 ${errors.password ? 'border-red-500 bg-red-50/30' : ''}`}
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={handleChange}
                 />
+                {errors.password && <p className="text-xs font-bold text-red-500 mt-1 ml-1">{errors.password}</p>}
               </div>
 
               <div className="space-y-2">
@@ -163,21 +186,25 @@ const Register = () => {
                   name="confirmPassword"
                   type="password" 
                   required 
-                  className="input-field py-4"
+                  className={`input-field py-4 ${errors.confirmPassword ? 'border-red-500 bg-red-50/30' : ''}`}
                   placeholder="••••••••"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                 />
+                {errors.confirmPassword && <p className="text-xs font-bold text-red-500 mt-1 ml-1">{errors.confirmPassword}</p>}
               </div>
             </div>
 
             <button 
               type="submit" 
               disabled={isLoading}
-              className="btn-primary w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-extrabold mt-8 hover:transform hover:-translate-y-0.5 transition-all shadow-xl"
+              className="btn-primary w-full py-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-extrabold mt-8 hover:transform hover:-translate-y-0.5 transition-all shadow-xl active:scale-[0.98]"
             >
               {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span>Creating Account...</span>
+                </>
               ) : (
                 'Create My Account'
               )}

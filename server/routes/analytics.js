@@ -1,16 +1,15 @@
 import express from 'express';
-import { getDashboardStats, getUtilizationData, getPopularResources, getUpcomingEvents, getTasksData, getCalendarData } from '../controllers/analyticsController.js';
+import { getAnalytics, getUtilization, getRecentEvents, getCalendarEvents } from '../controllers/bookingController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.use(authMiddleware);
+// Basic stats are visible to all authenticated users
+router.get('/stats', authMiddleware, getAnalytics);
 
-router.get('/stats', getDashboardStats);
-router.get('/utilization', getUtilizationData);
-router.get('/popular', getPopularResources);
-router.get('/events', getUpcomingEvents);
-router.get('/tasks', getTasksData);
-router.get('/calendar', getCalendarData);
+// Specific analytics views
+router.get('/utilization', authMiddleware, getUtilization);
+router.get('/events', authMiddleware, getRecentEvents);
+router.get('/calendar', authMiddleware, getCalendarEvents);
 
 export default router;

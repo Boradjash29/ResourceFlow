@@ -1,13 +1,20 @@
 import express from 'express';
-import { getAllBookings, createBooking, cancelBooking } from '../controllers/bookingController.js';
+import { getAllBookings, createBooking, cancelBooking, getBookingById, checkAvailability, cancelSeries, bulkUpdateBookings, bulkDeleteBookings } from '../controllers/bookingController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
+import { validate } from '../middleware/validate.js';
+import { createBookingSchema } from '../validations/booking.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
 
 router.get('/', getAllBookings);
-router.post('/', createBooking);
+router.get('/check-availability', checkAvailability);
+router.get('/:id', getBookingById);
+router.post('/', validate(createBookingSchema), createBooking);
+router.patch('/bulk-status', bulkUpdateBookings);
+router.delete('/bulk-delete', bulkDeleteBookings);
 router.delete('/:id', cancelBooking);
+router.delete('/series/:series_id', cancelSeries);
 
 export default router;

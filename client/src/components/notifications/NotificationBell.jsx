@@ -26,8 +26,12 @@ const NotificationBell = () => {
   useEffect(() => {
     fetchNotifications();
     
-    // Simple polling for "real-time" feel
-    const interval = setInterval(fetchNotifications, 30000);
+    // Bug 7: Visibility-aware polling
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchNotifications();
+      }
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 

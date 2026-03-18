@@ -10,10 +10,14 @@ export function buildResourceContext(resources, userBookings = []) {
     type: ${r.type}
     capacity: ${r.capacity} people
     location: ${r.location || 'Not specified'}
-    description: ${r.description || r.content}
+    description: ${r.description || r.content || ""}
     status: ${r.status || 'AVAILABLE'}
   `).join('\n---\n')
     : 'No matching resources found in context.';
+
+  if (resources.length > 0 && resources.some(r => !r.description && !r.content)) {
+    console.warn('[RAG] Resource missing both description and content:', resources.find(r => !r.description && !r.content)?.name);
+  }
 
   const scheduleBlock = userBookings.length > 0
     ? userBookings.map(b => `

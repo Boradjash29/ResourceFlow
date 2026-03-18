@@ -18,6 +18,10 @@ const ChatWidget = () => {
       setMessages([
         { role: 'assistant', content: `Hi ${firstName}! I am your ResourceFlow Assistant. Looking for a room or equipment today?` }
       ]);
+    } else if (!user && !isLoading) {
+       setMessages([
+        { role: 'assistant', content: `Hi there! I am your ResourceFlow Assistant. Looking for a room or equipment today?` }
+      ]);
     }
   }, [user]);
 
@@ -45,7 +49,7 @@ const ChatWidget = () => {
         messages: [...messages, userMsg] 
       });
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.message }]);
-    } catch (error) {
+    } catch {
       setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I am having trouble connecting to the server. Please check your internet connection and try again.' }]);
     } finally {
       setIsLoading(false);

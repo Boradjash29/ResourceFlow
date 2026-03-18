@@ -186,40 +186,45 @@ export const retrieveWithCascade = async (query, hasResourceIntent) => {
 };
 
 /**
- * Cross-Encoder Reranker (Phase 1C)
+ * Batched Reranker (Phase 1C)
+ * Bug 1: Batched all chunks into one LLM call for speed and cost.
  */
 export async function rerankChunks(query, chunks) {
-  if (chunks.length <= 2) return chunks; // skip if few results
+  if (chunks.length <= 1) return chunks; 
 
-  console.log(`[RAG] Reranking ${chunks.length} candidates...`);
+  console.log(`[RAG] Batched reranking ${chunks.length} candidates...`);
   
-  // Score each chunk against the query using LLM
-  const scores = await Promise.all(chunks.map(async (chunk, i) => {
-    const score = await scoreRelevance(query, chunk.content || chunk.description);
-    return { chunk, score, originalRank: i };
-  }));
-
-  return scores
-    .sort((a, b) => b.score - a.score)
-    .map(x => x.chunk);
-}
-
-/**
- * LLM Relevance Scoring (Phase 1C)
- */
-async function scoreRelevance(query, passage) {
   try {
     const systemPrompt = {
       role: 'system',
-      content: 'You are a high-precision relevance scorer. Reply ONLY with a number between 0 and 10.'
+      content: 'You are a high-precision reranker. Your task is to rank the provided passages by relevance to the query. Reply ONLY with a valid JSON array of indices [0, 1, 2...] in order of most relevant to least relevant.'
     };
     
-    // We use a small, fast model for scoring
-    const res = await getAIResponse([{ role: 'user', content: `Rate relevance 0-10 of this passage to the query. Reply with ONLY a number.\nQuery: "${query}"\nPassage: "${passage}"` }], systemPrompt);
+    const passageList = chunks.map((c, i) => `[ID ${i}]: ${c.content || c.description}`).join('\n\n');
+    const userPrompt = `Query: "${query}"\n\nPassages:\n${passageList}\n\nRank the IDs by relevance. Reply with ONLY a JSON array, e.g., [2, 0, 1].`;
+
+    const res = await getAIResponse([{ role: 'user', content: userPrompt }], systemPrompt);
     
-    return parseFloat(res.trim()) || 0;
+    // Attempt to parse the indices
+    const indicesStr = res.match(/\[[\d,\s]+\]/);
+    if (indicesStr) {
+      const indices = JSON.parse(indicesStr[0]);
+      const reranked = indices
+        .filter(idx => idx >= 0 && idx < chunks.length)
+        .map(idx => chunks[idx]);
+      
+      // Add any missing chunks back at the end just in case LLM missed some
+      const seenIds = new Set(indices);
+      chunks.forEach((c, i) => {
+        if (!seenIds.has(i)) reranked.push(c);
+      });
+
+      return reranked;
+    }
+    
+    return chunks; // Fallback to original order if parsing fails
   } catch (err) {
-    console.error('Reranking Score Error:', err);
-    return 0;
+    console.error('Batched Reranking Error:', err);
+    return chunks; // Fallback
   }
 }

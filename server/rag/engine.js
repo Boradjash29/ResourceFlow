@@ -9,8 +9,24 @@ import { preprocessQuery } from './utils.js';
 import { getSystemPrompt, buildResourceContext, fitContextToBudget } from './prompts.js';
 import { ActionHandler } from '../services/actionHandler.js';
 
-const responseCache = new Map(); // Semantic Cache (Phase 5)
-const CACHE_THRESHOLD = 0.95; 
+// Bug 2 & 9: Semantic Cache with TTL and Environment tuning
+const responseCache = new Map(); 
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const MAX_CACHE = 1000;
+const CACHE_THRESHOLD = parseFloat(process.env.CACHE_THRESHOLD) || 0.85;
+
+// Cleanup Interval (runs every 10 mins)
+setInterval(() => {
+  const now = Date.now();
+  for (const [query, entry] of responseCache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL) responseCache.delete(query);
+  }
+  if (responseCache.size > MAX_CACHE) {
+    const toDelete = Math.floor(MAX_CACHE * 0.2);
+    const keys = Array.from(responseCache.keys());
+    for (let i = 0; i < toDelete; i++) responseCache.delete(keys[i]);
+  }
+}, 10 * 60 * 1000);
 
 /**
  * The RAGEngine orchestrates the entire intelligence flow.
@@ -19,10 +35,9 @@ export class RAGEngine {
   constructor(req, messages, memory) {
     this.req = req;
     this.user = req.user;
-    this.memory = memory; // Phase 2C
+    this.memory = memory; 
     this.messages = messages;
     
-    // Phase 2C: Resolve pronouns ("it", "that room") before retrieval
     const rawText = messages[messages.length - 1].content.trim();
     this.userText = this.memory.resolvePronouns(rawText);
   }
@@ -31,13 +46,20 @@ export class RAGEngine {
     const startTime = performance.now();
     let retrievalTime = 0;
     
-    // Phase 5A: Semantic Cache Lookup
+    // Bug 2: Semantic Cache Lookup with TTL check
     const userEmbedding = await generateEmbedding(this.userText);
+    const now = Date.now();
+
     for (const [cachedQuery, entry] of responseCache.entries()) {
+      if (now - entry.timestamp > CACHE_TTL) {
+        responseCache.delete(cachedQuery);
+        continue;
+      }
       if (entry.embedding) {
         const similarity = this.cosineSimilarity(userEmbedding, entry.embedding);
         if (similarity > CACHE_THRESHOLD) {
           RAGLogger.logQuery(this.user.id, this.userText, 'semantic_cache');
+          entry.timestamp = now; // renew lease
           return entry.result;
         }
       }
@@ -99,7 +121,13 @@ export class RAGEngine {
       );
       
       let aiResponse = await getAIResponse(fittedHistory, systemPrompt);
-      aiResponse = aiResponse.replace(/```[\w]*\n?[\s\S]*?```/g, '').trim();
+      
+      // Bug 4: Surgical Sanitization (Keep markdown code blocks/formatting)
+      aiResponse = aiResponse
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // remove scripts
+        .replace(/\n{3,}/g, '\n\n') // remove excessive whitespace
+        .trim();
+
       const aiTime = performance.now() - aiStart;
 
       // 7. Post-Processing & Actions
@@ -116,16 +144,16 @@ export class RAGEngine {
         resources: fittedResources.map(r => ({ id: r.id, name: r.name }))
       };
 
-      // 9. Structured Monitoring (Phase 7B)
+      // 9. Structured Monitoring
       const totalTime = performance.now() - startTime;
       RAGLogger.logPerformance(this.user.id, {
         totalTime: totalTime.toFixed(2),
         retrievalTime: retrievalTime.toFixed(2),
         aiTime: aiTime.toFixed(2),
-        tokens: 'N/A' // Token counting requires API level updates or local estimation
+        tokens: 'N/A' 
       });
 
-      responseCache.set(this.userText, { result, embedding: userEmbedding });
+      responseCache.set(this.userText, { result, embedding: userEmbedding, timestamp: Date.now() });
       return result;
 
     } catch (error) {

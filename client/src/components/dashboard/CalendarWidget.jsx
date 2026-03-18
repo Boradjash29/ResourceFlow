@@ -79,7 +79,10 @@ const CalendarWidget = ({ activeDays = [] }) => {
               }
 
               const isActive = date === todayDay;
-              const hasBooking = isCurrentRealMonth ? activeDays.includes(date) : false;
+              const hasBooking = isCurrentRealMonth ? activeDays.some(event => {
+                const eventDate = new Date(event.start || event.start_time);
+                return eventDate.getDate() === date && eventDate.getMonth() === month && eventDate.getFullYear() === year;
+              }) : false;
               const isPast = isCurrentRealMonth && date < todayDay;
 
               return (

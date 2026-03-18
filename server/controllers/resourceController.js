@@ -1,8 +1,21 @@
 import prisma from '../config/prisma.js';
 import { createAuditLog } from '../services/auditService.js';
 
+export const getResourceTypes = async (req, res) => {
+  try {
+    const types = await prisma.resource.findMany({
+      select: { type: true },
+      distinct: ['type'],
+    });
+    res.status(200).json({ types: types.map(r => r.type).filter(Boolean) });
+  } catch (error) {
+    console.error('Error fetching resource types:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 export const getAllResources = async (req, res) => {
-  const { type, status, capacity_min, search, page = 1, limit = 10 } = req.query;
+  const { type, status, capacity_min, location, search, page = 1, limit = 10, sort_by = 'created_at', sort_order = 'desc' } = req.query;
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const take = parseInt(limit);
   
@@ -11,12 +24,14 @@ export const getAllResources = async (req, res) => {
     
     if (type) where.type = type;
     if (status) where.status = status;
+    if (location) where.location = { contains: location, mode: 'insensitive' };
     if (capacity_min) where.capacity = { gte: parseInt(capacity_min) };
     
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
-        { location: { contains: search, mode: 'insensitive' } }
+        { location: { contains: search, mode: 'insensitive' } },
+        { description: { contains: search, mode: 'insensitive' } }
       ];
     }
 
@@ -25,7 +40,7 @@ export const getAllResources = async (req, res) => {
         where,
         skip,
         take,
-        orderBy: { created_at: 'desc' }
+        orderBy: { [sort_by]: sort_order }
       }),
       prisma.resource.count({ where })
     ]);
@@ -169,7 +184,8 @@ export const deleteResource = async (req, res) => {
       }
     });
 
-    if (bookings.length > 0 && force !== 'true') {
+    const isForce = force === 'true' || force === true;
+    if (bookings.length > 0 && !isForce) {
       return res.status(409).json({ 
         message: 'Resource has future bookings. Cancel them first or use force flag.',
         pending_bookings: bookings.length 
@@ -193,6 +209,65 @@ export const deleteResource = async (req, res) => {
     res.status(200).json({ message: 'Resource deleted successfully' });
   } catch (error) {
     console.error('Error deleting resource:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const bulkUpdateResources = async (req, res) => {
+  const { ids, status } = req.body;
+  const userId = req.user.id;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'No resource IDs provided' });
+  }
+
+  try {
+    const result = await prisma.resource.updateMany({
+      where: { id: { in: ids } },
+      data: { status, updated_at: new Date() }
+    });
+
+    await createAuditLog({
+      userId,
+      action: 'BULK_UPDATE_RESOURCES',
+      entityType: 'resource',
+      details: { ids, status, updatedCount: result.count },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    res.status(200).json({ message: `Successfully updated ${result.count} resources`, count: result.count });
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const bulkDeleteResources = async (req, res) => {
+  const { ids } = req.body;
+  const userId = req.user.id;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ message: 'No resource IDs provided' });
+  }
+
+  try {
+    const result = await prisma.resource.deleteMany({
+      where: { id: { in: ids } }
+    });
+
+    await createAuditLog({
+      userId,
+      action: 'BULK_DELETE_RESOURCES',
+      entityType: 'resource',
+      details: { ids, deletedCount: result.count },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    res.status(200).json({ message: `Successfully deleted ${result.count} resources`, count: result.count });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

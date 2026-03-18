@@ -42,7 +42,7 @@ const UpcomingEventsBanner = ({ events = [] }) => {
                        {index === 0 && ' 🚀'}
                     </h4>
                     <div className="flex gap-2 items-center mt-1">
-                      <span className="text-xs opacity-90">{event.resource.name} ({timeStr})</span>
+                      <span className="text-xs opacity-90">{event.resource?.name || 'Unknown Resource'} ({timeStr})</span>
                       <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full uppercase tracking-wide">{tag}</span>
                     </div>
                   </div>

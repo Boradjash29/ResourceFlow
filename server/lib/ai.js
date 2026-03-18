@@ -15,6 +15,15 @@ const client = new OpenAI({
 });
 
 const embeddingCache = new Map();
+const MAX_EMBEDDING_CACHE = 1000;
+
+function addToEmbeddingCache(text, embedding) {
+  if (embeddingCache.size >= MAX_EMBEDDING_CACHE) {
+    const firstKey = embeddingCache.keys().next().value;
+    embeddingCache.delete(firstKey);
+  }
+  embeddingCache.set(text, embedding);
+}
 
 /**
  * Generates embeddings for text or an array of texts.
@@ -45,7 +54,7 @@ export const generateEmbedding = async (input) => {
       response.data.forEach((item, i) => {
         const idx = missingIndices[i];
         const embedding = item.embedding;
-        embeddingCache.set(missingTexts[i], embedding);
+        addToEmbeddingCache(missingTexts[i], embedding);
         results[idx] = embedding;
       });
     }

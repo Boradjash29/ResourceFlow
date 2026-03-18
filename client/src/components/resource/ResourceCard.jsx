@@ -2,19 +2,25 @@ import React from 'react';
 import { Users, MapPin, Tag, Package } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const ResourceCard = ({ resource, onBook }) => {
-  const statusColors = {
-    available: 'bg-green-100/50 text-success border-green-200/20',
-    unavailable: 'bg-red-100/50 text-danger border-red-200/20'
-  };
-
+const ResourceCard = ({ resource, onBook, selectable = false, onSelect, isSelected = false }) => {
   return (
     <motion.div 
       whileHover={{ y: -8 }}
       transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className="h-full"
+      className="h-full relative"
     >
-      <div className="card h-full flex flex-col hover:border-brand-blue/10 transition-colors">
+      {selectable && (
+        <div className="absolute top-4 left-4 z-20">
+          <input 
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onSelect(resource.id)}
+            className="w-5 h-5 rounded-lg border-gray-300 text-brand-blue focus:ring-brand-blue cursor-pointer transition-all shadow-md bg-white/80 backdrop-blur-sm"
+            aria-label={`Select ${resource.name}`}
+          />
+        </div>
+      )}
+      <div className={`card h-full flex flex-col hover:border-brand-blue/10 transition-colors ${isSelected ? 'border-brand-blue ring-1 ring-brand-blue/20 bg-brand-blue/[0.02]' : ''}`}>
         <div className="relative w-full h-44 rounded-2xl overflow-hidden mb-5 border border-gray-100 dark:border-white/5 bg-brand-bg dark:bg-zinc-950 group">
           {resource.image_url ? (
             <img 
