@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import SessionsList from '../components/auth/SessionsList';
 import TwoFactorSetup from '../components/auth/TwoFactorSetup';
-import { User, Mail, Shield, Smartphone, Lock, AlertCircle, Camera, Check, X, Trash2 } from 'lucide-react';
+import { User, Mail, Shield, Smartphone, Lock, AlertCircle, Camera, Check, X, Trash2, Loader2 } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import ConfirmationDialog from '../components/ui/ConfirmationDialog';
@@ -29,6 +29,7 @@ const Profile = () => {
 
   useEffect(() => {
     if (user) {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       setProfile(user);
       setEditData({ name: user.name, email: user.email });
       setLoading(false);
@@ -51,8 +52,18 @@ const Profile = () => {
       });
       setProfile({ ...profile, avatar_url: data.user.avatar_url });
       toast?.success('Avatar updated!');
-    } catch (err) {
-      toast?.error(err.response?.data?.message || 'Upload failed');
+    } catch {
+      toast?.error('Upload failed');
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    try {
+      await api.delete('/users/avatar');
+      setProfile({ ...profile, avatar_url: null });
+      toast?.success('Avatar removed!');
+    } catch {
+      toast?.error('Failed to remove avatar');
     }
   };
 
@@ -73,8 +84,8 @@ const Profile = () => {
       setProfile(data.user);
       setIsEditing(false);
       toast?.success('Profile updated!');
-    } catch (err) {
-      toast?.error(err.response?.data?.message || 'Update failed');
+    } catch {
+      toast?.error('Update failed');
     }
   };
 
@@ -92,8 +103,8 @@ const Profile = () => {
       setShowPasswordModal(false);
       setPasswords({ current: '', new: '', confirm: '' });
       alert('Password changed successfully');
-    } catch (err) {
-      alert(err.response?.data?.message || 'Failed to change password');
+    } catch {
+      alert('Failed to change password');
     }
   };
 
@@ -102,7 +113,7 @@ const Profile = () => {
       await api.delete('/users');
       logout();
       window.location.href = '/register';
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete account');
     }
   };
@@ -111,42 +122,59 @@ const Profile = () => {
     try {
       await api.post('/auth/2fa/disable');
       window.location.reload();
-    } catch (err) {
+    } catch {
       toast.error('Failed to disable 2FA');
     }
   };
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="w-8 h-8 border-4 border-brand-blue border-t-transparent rounded-full animate-spin"></div>
+    <div className="flex items-center justify-center p-20">
+      <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
     </div>
   );
   
-  if (error) return <div className="min-h-screen flex items-center justify-center text-danger font-bold">{error}</div>;
+  if (error) return (
+    <div className="flex items-center justify-center p-20 text-danger font-bold bg-danger/5 rounded-[2rem] border border-danger/10">
+      <AlertCircle className="w-6 h-6 mr-2" /> {error}
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="py-8">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Profile Card */}
-        <div className="bg-white rounded-[32px] shadow-sm border border-gray-100 overflow-hidden">
-          <div className="h-32 bg-brand-blue/5"></div>
+        <div className="bg-white dark:bg-zinc-900 rounded-[32px] shadow-soft dark:shadow-none border border-gray-100 dark:border-white/5 overflow-hidden transition-colors">
+          <div className="h-32 bg-brand-blue/5 dark:bg-brand-blue/10"></div>
           <div className="px-8 pb-8">
             <div className="relative -mt-16 mb-6">
-              <div className="w-32 h-32 rounded-[2rem] bg-white p-2 shadow-lg group">
-                <div className="w-full h-full rounded-[1.5rem] bg-brand-blue flex items-center justify-center text-white overflow-hidden relative">
-                  {profile.avatar_url ? (
-                    <img 
-                      src={`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}${profile.avatar_url}`} 
-                      alt="Avatar" 
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <User size={48} />
-                  )}
-                  <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
-                    <Camera size={24} className="text-white" />
+              <div className="flex flex-col sm:flex-row sm:items-end gap-6">
+                <div className="w-32 h-32 rounded-[2rem] bg-white dark:bg-zinc-900 p-2 shadow-lg shrink-0">
+                  <div className="w-full h-full rounded-[1.5rem] bg-brand-blue flex items-center justify-center text-white overflow-hidden relative">
+                    {profile.avatar_url ? (
+                      <img 
+                        src={`${(import.meta.env.VITE_API_URL || 'http://localhost:3000/api').replace('/api', '')}${profile.avatar_url}`} 
+                        alt="Avatar" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <User size={48} />
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-wrap gap-2 pb-2">
+                  <label className="btn-primary px-4 py-2 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-2 hover:scale-105 transition-transform">
+                    <Camera size={14} /> Update Photo
                     <input type="file" className="hidden" onChange={handleAvatarUpload} accept="image/*" />
                   </label>
+                  {profile.avatar_url && (
+                    <button 
+                      onClick={handleAvatarRemove}
+                      className="px-4 py-2 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-500/10 dark:hover:bg-red-500/20 text-xs font-bold flex items-center gap-2 transition-colors"
+                    >
+                      <Trash2 size={14} /> Remove
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -157,7 +185,7 @@ const Profile = () => {
                   <div className="space-y-4">
                     <div>
                       <input 
-                        className={`w-full text-2xl font-bold text-[#1B2559] bg-gray-50 border-b-2 ${errors.name ? 'border-red-500' : 'border-brand-blue'} focus:outline-none p-1`}
+                        className={`w-full text-2xl font-bold text-[#1B2559] dark:text-white bg-gray-50 dark:bg-zinc-800 border-b-2 ${errors.name ? 'border-red-500' : 'border-brand-blue'} focus:outline-none p-2 rounded-t-lg`}
                         value={editData.name}
                         onChange={(e) => setEditData({ ...editData, name: e.target.value })}
                       />
@@ -165,7 +193,7 @@ const Profile = () => {
                     </div>
                     <div>
                       <input 
-                        className={`w-full text-sm text-brand-lavender bg-gray-50 border-b-2 ${errors.email ? 'border-red-500' : 'border-brand-blue'} focus:outline-none p-1`}
+                        className={`w-full text-sm text-brand-lavender dark:text-zinc-400 bg-gray-50 dark:bg-zinc-800 border-b-2 ${errors.email ? 'border-red-500' : 'border-brand-blue'} focus:outline-none p-2 rounded-t-lg`}
                         value={editData.email}
                         onChange={(e) => setEditData({ ...editData, email: e.target.value })}
                       />
@@ -174,7 +202,7 @@ const Profile = () => {
                   </div>
                 ) : (
                   <>
-                    <h2 className="text-3xl font-extrabold text-[#1B2559] tracking-tight">{profile.name}</h2>
+                    <h2 className="text-3xl font-extrabold text-[#1B2559] dark:text-white tracking-tight">{profile.name}</h2>
                     <div className="flex items-center gap-4 mt-2">
                       <span className="flex items-center gap-1.5 text-brand-lavender font-bold text-xs uppercase tracking-widest">
                         <Shield size={14} className="text-brand-blue" /> {profile.role}
@@ -197,7 +225,7 @@ const Profile = () => {
                     </button>
                     <button 
                       onClick={() => setIsEditing(false)}
-                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-100 text-brand-lavender text-sm font-bold"
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gray-100 dark:bg-zinc-800 text-brand-lavender dark:text-zinc-400 text-sm font-bold"
                     >
                       <X size={16} /> Cancel
                     </button>
@@ -217,18 +245,18 @@ const Profile = () => {
 
         {/* Security & Sessions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-8 shadow-soft dark:shadow-none border border-gray-100 dark:border-white/5 transition-colors">
              <SessionsList />
           </div>
           
-          <div className="bg-white rounded-[32px] p-8 shadow-sm border border-gray-100">
+          <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-8 shadow-soft dark:shadow-none border border-gray-100 dark:border-white/5 transition-colors">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-[#1B2559]">Security Settings</h3>
+              <h3 className="text-lg font-bold text-[#1B2559] dark:text-white">Security Settings</h3>
               <Lock className="w-5 h-5 text-brand-blue/40" />
             </div>
 
             <div className="space-y-6">
-              <div className="p-6 rounded-[2rem] bg-gray-50 border border-gray-100">
+              <div className="p-6 rounded-[2rem] bg-gray-50 dark:bg-zinc-800/50 border border-gray-100 dark:border-white/5">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -237,7 +265,7 @@ const Profile = () => {
                       <Smartphone className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-[#1B2559]">Two-Factor Authentication</p>
+                      <p className="text-sm font-bold text-[#1B2559] dark:text-white">Two-Factor Authentication</p>
                       <p className={`text-xs font-bold uppercase tracking-wider ${
                         profile.two_factor_enabled ? 'text-success' : 'text-brand-lavender'
                       }`}>
@@ -268,10 +296,10 @@ const Profile = () => {
 
               {show2FASetup && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                  <div className="bg-white rounded-[32px] p-8 max-w-md w-full relative shadow-2xl">
+                  <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-8 max-w-md w-full relative shadow-2xl border border-white dark:border-white/10">
                     <button 
                       onClick={() => setShow2FASetup(false)}
-                      className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full"
+                      className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
                     >
                       <X className="w-5 h-5 text-brand-lavender" />
                     </button>
@@ -280,14 +308,14 @@ const Profile = () => {
                 </div>
               )}
 
-              <div className="p-6 rounded-[2rem] bg-gray-50 border border-gray-100">
+              <div className="p-6 rounded-[2rem] bg-gray-50 dark:bg-zinc-800/50 border border-gray-100 dark:border-white/5">
                 <div className="flex items-center justify-between">
                   <div className="flex gap-3 items-center">
                     <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-500 flex items-center justify-center">
                       <AlertCircle className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-[#1B2559]">Password</p>
+                      <p className="text-sm font-bold text-[#1B2559] dark:text-white">Password</p>
                       <p className="text-xs font-medium text-brand-lavender">Update your security pass</p>
                     </div>
                   </div>
@@ -301,7 +329,7 @@ const Profile = () => {
               </div>
 
               {/* Delete Account Section */}
-              <div className="mt-8 pt-8 border-t border-gray-100">
+              <div className="mt-8 pt-8 border-t border-gray-100 dark:border-white/5">
                 <div className="flex items-center gap-3 mb-4">
                   <Trash2 className="w-5 h-5 text-danger" />
                   <h4 className="text-sm font-bold text-danger">Danger Zone</h4>
@@ -325,21 +353,21 @@ const Profile = () => {
         {/* Change Password Modal */}
         {showPasswordModal && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-[32px] p-8 max-w-md w-full relative shadow-2xl">
+            <div className="bg-white dark:bg-zinc-900 rounded-[32px] p-8 max-w-md w-full relative shadow-2xl border border-white dark:border-white/10">
               <button 
                 onClick={() => setShowPasswordModal(false)}
-                className="absolute top-6 right-6 p-2 hover:bg-gray-100 rounded-full"
+                className="absolute top-6 right-6 p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors"
               >
                 <X className="w-5 h-5 text-brand-lavender" />
               </button>
-              <h3 className="text-xl font-bold text-[#1B2559] mb-6">Change Password</h3>
+              <h3 className="text-xl font-bold text-[#1B2559] dark:text-white mb-6">Change Password</h3>
               <form onSubmit={handleChangePassword} className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold text-brand-lavender uppercase mb-2">Current Password</label>
                   <input 
                     type="password"
                     required
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-brand-blue focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-white/5 focus:border-brand-blue focus:outline-none dark:text-white"
                     value={passwords.current}
                     onChange={(e) => setPasswords({...passwords, current: e.target.value})}
                   />
@@ -349,7 +377,7 @@ const Profile = () => {
                   <input 
                     type="password"
                     required
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-brand-blue focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-white/5 focus:border-brand-blue focus:outline-none dark:text-white"
                     value={passwords.new}
                     onChange={(e) => setPasswords({...passwords, new: e.target.value})}
                   />
@@ -359,7 +387,7 @@ const Profile = () => {
                   <input 
                     type="password"
                     required
-                    className="w-full px-4 py-3 rounded-xl bg-gray-50 border border-gray-100 focus:border-brand-blue focus:outline-none"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-zinc-800 border border-gray-100 dark:border-white/5 focus:border-brand-blue focus:outline-none dark:text-white"
                     value={passwords.confirm}
                     onChange={(e) => setPasswords({...passwords, confirm: e.target.value})}
                   />

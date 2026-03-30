@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { 
-  Calendar, Clock, MapPin, Users, ChevronLeft, 
+  Calendar, Clock, MapPin, Users, User, ChevronLeft, 
   Download, Trash2, Printer, AlertCircle, Loader2,
   CheckCircle, FileText, Info
 } from 'lucide-react';
@@ -23,8 +23,8 @@ const BookingDetails = () => {
       try {
         const response = await api.get(`/bookings/${id}`);
         setBooking(response.data);
-      } catch (error) {
-        console.error('Error fetching booking:', error);
+      } catch {
+        console.error('Error fetching booking');
         toast.error('Could not load booking details');
         navigate('/dashboard/bookings');
       } finally {
@@ -39,13 +39,9 @@ const BookingDetails = () => {
       await api.delete(`/bookings/${id}`);
       setBooking({ ...booking, status: 'cancelled' });
       toast.success('Reservation cancelled');
-    } catch (error) {
+    } catch {
       toast.error('Failed to cancel booking');
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   if (loading) {
@@ -80,23 +76,6 @@ const BookingDetails = () => {
           </div>
           Back to list
         </button>
-
-        <div className="flex gap-3">
-          <button 
-            onClick={handlePrint}
-            className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-zinc-900 rounded-2xl text-sm font-bold text-[#1B2559] dark:text-white shadow-soft border border-gray-100 dark:border-white/5 hover:bg-gray-50 transition-all"
-          >
-            <Printer className="w-4 h-4" />
-            Print Report
-          </button>
-          <button 
-            onClick={handlePrint}
-            className="btn-primary px-6 py-3 rounded-2xl text-sm font-bold flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Download PDF
-          </button>
-        </div>
       </motion.div>
 
       {/* Main Detail Card */}

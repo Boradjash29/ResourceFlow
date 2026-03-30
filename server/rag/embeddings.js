@@ -48,7 +48,6 @@ export const syncAllResources = async () => {
         Description: ${res.description || `A ${res.type.replace('_', ' ')} at ${res.location}.`}
       `.trim();
 
-      // Using upgraded semantic chunking (Phase 1B)
       const chunks = semanticChunk(fullText, ragConfig.chunkSize / 4, ragConfig.chunkOverlap);
       chunks.forEach((segment, index) => {
         allChunks.push({
@@ -67,28 +66,103 @@ export const syncAllResources = async () => {
 
     if (allChunks.length === 0) return 0;
 
-    console.log(`[RAG] Embedding ${allChunks.length} chunks...`);
+    console.log(`[RAG] Generating embeddings for ${allChunks.length} chunks...`);
     const chunkTexts = allChunks.map(c => c.content);
     const embeddings = await generateEmbedding(chunkTexts);
 
+    // Optimized Batched Transaction
     await prisma.$transaction(async (tx) => {
+      // Step 1: Clear old entries (Essential when changing dimensions)
+      console.log(`[RAG] Clearing existing embeddings to accommodate new 1536-dim vectors...`);
       await tx.embedding.deleteMany();
-      const insertPromises = allChunks.map((chunk, i) => {
-        const vectorValue = `[${embeddings[i].join(',')}]`;
-        const metadataJson = JSON.stringify(chunk.metadata);
+
+      // Step 2: Batched Insertion (Reduce round-trips)
+      const batchSize = 50;
+      for (let i = 0; i < allChunks.length; i += batchSize) {
+        const batch = allChunks.slice(i, i + batchSize);
+        const batchEmbeddings = embeddings.slice(i, i + batchSize);
+        
+        // FIX: Bug 1 - Replaced $executeRawUnsafe with parameterized $executeRaw
+        await Promise.all(batch.map((chunk, j) => {
+          const vectorValue = `[${batchEmbeddings[j].join(',')}]`;
+          return tx.$executeRaw`
+            INSERT INTO embeddings (id, resource_id, content, embedding_vector, metadata)
+            VALUES (uuid_generate_v4(), ${chunk.resourceId}::uuid, ${chunk.content}, ${vectorValue}::vector, ${chunk.metadata}::jsonb)
+          `;
+        }));
+      }
+    }, {
+      timeout: 30000 // 30s timeout for large syncs
+    });
+
+    console.log(`[RAG] Successfully synced ${allChunks.length} chunks.`);
+    return allChunks.length;
+  } catch (error) {
+    console.error('[RAG] Vector Sync Critical Error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Syncs a single resource by its ID.
+ * Called automatically when a resource is created or updated.
+ */
+export const syncSingleResource = async (resourceId) => {
+  try {
+    const res = await prisma.resource.findUnique({
+      where: { id: resourceId }
+    });
+
+    if (!res) {
+      // If resource is gone, clear its embeddings
+      await prisma.embedding.deleteMany({
+        where: { resource_id: resourceId }
+      });
+      return 0;
+    }
+
+    const fullText = `
+      Resource: ${res.name}
+      Type: ${res.type.replace('_', ' ')}
+      Location: ${res.location}
+      Capacity: ${res.capacity} persons
+      Status: ${res.status}
+      Description: ${res.description || `A ${res.type.replace('_', ' ')} at ${res.location}.`}
+    `.trim();
+
+    const chunks = semanticChunk(fullText, ragConfig.chunkSize / 4, ragConfig.chunkOverlap);
+    const chunkTexts = chunks.map(c => c);
+    const embeddings = await generateEmbedding(chunkTexts);
+
+    await prisma.$transaction(async (tx) => {
+      // Clear old
+      await tx.embedding.deleteMany({
+        where: { resource_id: resourceId }
+      });
+
+      // Insert new
+      await Promise.all(chunks.map((segment, index) => {
+        const vectorValue = `[${embeddings[index].join(',')}]`;
+        const metadata = {
+          name: res.name,
+          type: res.type,
+          chunk_index: index,
+          total_chunks: chunks.length,
+          synced_at: new Date().toISOString()
+        };
 
         return tx.$executeRaw`
           INSERT INTO embeddings (id, resource_id, content, embedding_vector, metadata)
-          VALUES (uuid_generate_v4(), ${chunk.resourceId}::uuid, ${chunk.content}, ${vectorValue}::vector, ${metadataJson}::jsonb)
+          VALUES (uuid_generate_v4(), ${res.id}::uuid, ${segment}, ${vectorValue}::vector, ${metadata}::jsonb)
         `;
-      });
-      await Promise.all(insertPromises);
+      }));
     });
 
-    return allChunks.length;
+    console.log(`[RAG] Auto-synced resource "${res.name}" (${chunks.length} chunks).`);
+    return chunks.length;
   } catch (error) {
-    console.error('Vector Sync Error:', error);
-    throw error;
+    console.error(`[RAG] Auto-sync Error for ${resourceId}:`, error);
+    // Don't throw, just log to prevent breaking the main transaction if called improperly
   }
 };
 
@@ -116,7 +190,7 @@ function reciprocalRankFusion(denseList, sparseList, k = 60) {
 /**
  * Performs a vector similarity search to find relevant resources for a user query.
  */
-export const findRelevantResources = async (userQuery, limit = ragConfig.topK, threshold = ragConfig.similarityThreshold) => {
+export const findRelevantResources = async (userQuery, limit = ragConfig.topK, threshold = ragConfig.cacheThreshold) => {
   try {
     const embedding = await generateEmbedding(userQuery);
     const vectorValue = `[${embedding.join(',')}]`;
@@ -165,7 +239,7 @@ export const searchByKeywords = async (queryText, limit = 10) => {
  */
 export const retrieveWithCascade = async (query, hasResourceIntent) => {
   // Level 1: Dense + Sparse RRF
-  const dense = await findRelevantResources(query, 10, 0.45);
+  const dense = await findRelevantResources(query, 10, 0.5);
   const sparse = await searchByKeywords(query, 10);
   let results = reciprocalRankFusion(dense, sparse);
   
@@ -175,7 +249,7 @@ export const retrieveWithCascade = async (query, hasResourceIntent) => {
   }
 
   // Level 2: Relaxed vector search
-  results = await findRelevantResources(query, 8, 0.65);
+  results = await findRelevantResources(query, 8, 0.7);
   if (results.length >= 1) {
     console.log(`[RAG] Retrieval: relaxed_vector → ${results.length} results`);
     return { results, method: 'relaxed_vector' };
@@ -208,18 +282,25 @@ export async function rerankChunks(query, chunks) {
     // Attempt to parse the indices
     const indicesStr = res.match(/\[[\d,\s]+\]/);
     if (indicesStr) {
-      const indices = JSON.parse(indicesStr[0]);
-      const reranked = indices
-        .filter(idx => idx >= 0 && idx < chunks.length)
-        .map(idx => chunks[idx]);
-      
-      // Add any missing chunks back at the end just in case LLM missed some
-      const seenIds = new Set(indices);
-      chunks.forEach((c, i) => {
-        if (!seenIds.has(i)) reranked.push(c);
-      });
+      try {
+        // FIX: Bug 4 - Sanitize trailing commas and handle parse errors
+        const cleaned = indicesStr[0].replace(/,\s*]/g, ']');
+        const indices = JSON.parse(cleaned);
+        const reranked = indices
+          .filter(idx => idx >= 0 && idx < chunks.length)
+          .map(idx => chunks[idx]);
+        
+        // Add any missing chunks back at the end just in case LLM missed some
+        const seenIds = new Set(indices);
+        chunks.forEach((c, i) => {
+          if (!seenIds.has(i)) reranked.push(c);
+        });
 
-      return reranked;
+        return reranked;
+      } catch (err) {
+        console.error('[Reranker] Failed to parse LLM response:', err.message, '| Raw:', indicesStr[0]);
+        return chunks; // fallback to original order
+      }
     }
     
     return chunks; // Fallback to original order if parsing fails

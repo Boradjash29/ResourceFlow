@@ -81,6 +81,26 @@ export const updateAvatar = async (req, res) => {
 };
 
 /**
+ * Delete user avatar.
+ */
+export const deleteAvatar = async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { avatar_url: null },
+      select: { id: true, name: true, email: true, avatar_url: true }
+    });
+
+    await logEvent({ userId, action: 'DELETE_AVATAR', entityType: 'USER', req });
+    res.status(200).json({ message: 'Avatar removed', user });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to remove avatar' });
+  }
+};
+
+/**
  * Delete account.
  */
 export const deleteAccount = async (req, res) => {

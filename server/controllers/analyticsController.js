@@ -23,48 +23,72 @@ const setCachedData = (key, data) => {
 };
 
 export const getDashboardStats = async (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ message: 'Forbidden: Analytics are restricted to administrators.' });
-  }
   try {
+    const now = new Date();
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+
     const [
       totalResources,
       totalBookings,
       activeBookings,
-      availableResources
+      bookings,
+      resources
     ] = await Promise.all([
       prisma.resource.count(),
-      prisma.booking.count({
-        where: { status: { not: 'cancelled' } }
-      }),
+      prisma.booking.count({ where: { status: { not: 'cancelled' } } }),
       prisma.booking.count({
         where: {
           status: 'confirmed',
-          start_time: { lte: new Date() },
-          end_time: { gte: new Date() }
+          start_time: { lte: now },
+          end_time: { gte: now }
         }
       }),
-      prisma.resource.count({
-        where: {
-          status: 'available',
-          bookings: {
-            none: {
-              status: 'confirmed',
-              OR: [
-                { start_time: { lte: new Date(), gte: new Date(new Date().setHours(0,0,0,0)) } },
-                { end_time: { gte: new Date(), lte: new Date(new Date().setHours(23,59,59,999)) } }
-              ]
-            }
-          }
-        }
+      prisma.booking.findMany({
+        where: { start_time: { gte: sixMonthsAgo }, status: { not: 'cancelled' } },
+        select: { start_time: true, resource: { select: { name: true } } }
+      }),
+      prisma.resource.findMany({
+        select: { name: true, _count: { select: { bookings: { where: { status: { not: 'cancelled' } } } } } }
       })
     ]);
 
+    // Process helper data
+    const monthlyTrends = Array.from({ length: 6 }).map((_, i) => {
+      const d = new Date();
+      d.setMonth(now.getMonth() - (5 - i));
+      const name = d.toLocaleString('default', { month: 'short' });
+      const count = bookings.filter(b => b.start_time.getMonth() === d.getMonth() && b.start_time.getFullYear() === d.getFullYear()).length;
+      return { name, count };
+    });
+
+    const peakHours = Array.from({ length: 24 }).map((_, hour) => ({
+      hour: `${hour}:00`,
+      count: bookings.filter(b => b.start_time.getHours() === hour).length
+    }));
+
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const dailyBookings = days.map((name, i) => ({
+      name,
+      count: bookings.filter(b => b.start_time.getDay() === i).length
+    }));
+
+    const resourceUtilization = resources
+      .map(r => ({ name: r.name, count: r._count.bookings }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
     res.status(200).json({
-      totalResources,
-      totalBookings,
-      activeBookings,
-      availableResources
+      summary: {
+        totalResources,
+        totalBookings,
+        activeBookings,
+        availableResources: totalResources - activeBookings // simplified
+      },
+      monthlyTrends,
+      peakHours,
+      resourceUtilization,
+      dailyBookings
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);

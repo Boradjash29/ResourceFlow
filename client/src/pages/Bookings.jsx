@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
-import { Calendar, Clock, MapPin, Trash2, Loader2, AlertCircle, Sparkles, Search, Filter, Repeat, Download, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, MapPin, Trash2, Loader2, AlertCircle, Sparkles, Search, Filter, Repeat, Download, CheckCircle2, Check, TrendingUp, ChevronDown } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link } from 'react-router-dom';
+import { Link, useOutletContext } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Skeleton from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmationDialog from '../components/ui/ConfirmationDialog';
+import CustomSelect from '../components/ui/CustomSelect';
 
 const Bookings = () => {
   const { user } = useAuth();
+  const { onBook } = useOutletContext();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1 });
@@ -51,8 +53,8 @@ const Bookings = () => {
       const response = await api.get(`/bookings?${params.toString()}`);
       setBookings(response.data.bookings);
       setPagination(response.data.pagination);
-    } catch (error) {
-      console.error('Error fetching bookings:', error);
+    } catch {
+      console.error('Error fetching bookings');
     } finally {
       setLoading(false);
     }
@@ -81,8 +83,8 @@ const Bookings = () => {
       setBookings(bookings.map(b => b.id === bookingToCancel.id ? { ...b, status: 'cancelled' } : b));
       setIsConfirmOpen(false);
       setBookingToCancel(null);
-    } catch (error) {
-      console.error('Failed to cancel booking:', error);
+    } catch {
+      console.error('Failed to cancel booking');
       setIsConfirmOpen(false);
       setBookingToCancel(null);
     }
@@ -100,8 +102,8 @@ const Bookings = () => {
       setBookings(bookings.map(b => b.series_id === seriesIdToCancel ? { ...b, status: 'cancelled' } : b));
       setIsSeriesConfirmOpen(false);
       setSeriesIdToCancel(null);
-    } catch (error) {
-      console.error('Failed to cancel series:', error);
+    } catch {
+      console.error('Failed to cancel series');
       setIsSeriesConfirmOpen(false);
       setSeriesIdToCancel(null);
     }
@@ -125,8 +127,8 @@ const Bookings = () => {
       }
       setSelectedBookings([]);
       setIsBulkConfirmOpen(false);
-    } catch (error) {
-      console.error('Bulk action failed:', error);
+    } catch {
+      console.error('Bulk action failed');
       setIsBulkConfirmOpen(false);
     }
   };
@@ -214,6 +216,21 @@ const Bookings = () => {
             </button>
           ))}
         </div>
+
+        <CustomSelect
+          value={`${filters.sort_by}-${filters.sort_order}`}
+          onChange={(val) => {
+            const [sort_by, sort_order] = val.split('-');
+            setFilters({ ...filters, sort_by, sort_order });
+          }}
+          options={[
+            { value: 'start_time-desc', label: 'Latest First' },
+            { value: 'start_time-asc', label: 'Earliest First' },
+            { value: 'meeting_title-asc', label: 'Title A-Z' }
+          ]}
+          icon={TrendingUp}
+          className="md:w-64"
+        />
       </div>
 
       {loading ? (
@@ -253,15 +270,29 @@ const Bookings = () => {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className={`card hover:border-brand-blue/10 transition-all relative overflow-hidden ${booking.status === 'cancelled' ? 'opacity-60 grayscale' : ''} ${selectedBookings.includes(booking.id) ? 'border-brand-blue ring-1 ring-brand-blue/20 bg-brand-blue/[0.02]' : ''}`}
               >
-                {/* Checkbox Overlay */}
-                <div className="absolute top-4 left-4 z-10">
-                  <input 
-                    type="checkbox"
-                    checked={selectedBookings.includes(booking.id)}
-                    onChange={() => toggleSelection(booking.id)}
-                    className="w-5 h-5 rounded-lg border-gray-300 text-brand-blue focus:ring-brand-blue cursor-pointer transition-all"
-                    aria-label={`Select booking ${booking.meeting_title}`}
-                  />
+                {/* Custom Checkbox */}
+                <div 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleSelection(booking.id);
+                  }}
+                  className={`absolute top-6 left-6 z-20 w-6 h-6 rounded-lg border-2 cursor-pointer flex items-center justify-center transition-all duration-300 group/checkbox ${
+                    selectedBookings.includes(booking.id)
+                      ? 'bg-brand-blue border-brand-blue shadow-lg shadow-brand-blue/30 scale-110'
+                      : 'bg-white dark:bg-zinc-800 border-gray-200 dark:border-white/10 hover:border-brand-blue hover:scale-105'
+                  }`}
+                >
+                  <AnimatePresence>
+                    {selectedBookings.includes(booking.id) && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                      >
+                        <Check className="w-4 h-4 text-white stroke-[3]" />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 <div className="flex flex-col lg:flex-row justify-between gap-6 pl-10">
@@ -357,15 +388,16 @@ const Bookings = () => {
               <div className="h-4 w-px bg-gray-200 dark:bg-white/10 mx-2"></div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-brand-lavender">Per page:</span>
-                <select 
-                  className="bg-transparent border-none outline-none text-sm font-bold text-[#1B2559] dark:text-white cursor-pointer"
-                  value={filters.limit}
-                  onChange={(e) => setFilters({ ...filters, limit: parseInt(e.target.value) })}
-                >
-                  <option value="10">10</option>
-                  <option value="20">20</option>
-                  <option value="50">50</option>
-                </select>
+                <CustomSelect
+                  value={filters.limit.toString()}
+                  onChange={(val) => setFilters({ ...filters, limit: parseInt(val) })}
+                  options={[
+                    { value: '10', label: '10' },
+                    { value: '20', label: '20' },
+                    { value: '50', label: '50' }
+                  ]}
+                  className="w-24"
+                />
               </div>
             </div>
 
@@ -399,7 +431,7 @@ const Bookings = () => {
           actionLabel={debouncedSearch || filters.status ? "Clear All Filters" : "Book a Resource"}
           onAction={debouncedSearch || filters.status 
             ? () => setFilters({ status: '', search: '', sort_by: 'start_time', sort_order: 'desc' })
-            : () => window.location.href = '/resources'
+            : () => onBook(null) // Open general booking form
           }
         />
       )}

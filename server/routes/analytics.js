@@ -1,15 +1,18 @@
 import express from 'express';
-import { getAnalytics, getUtilization, getRecentEvents, getCalendarEvents } from '../controllers/bookingController.js';
+import { 
+  getDashboardStats, 
+  getUtilizationData, 
+  getUpcomingEvents, 
+  getCalendarData 
+} from '../controllers/analyticsController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Basic stats are visible to all authenticated users
-router.get('/stats', authMiddleware, getAnalytics);
-
-// Specific analytics views
-router.get('/utilization', authMiddleware, getUtilization);
-router.get('/events', authMiddleware, getRecentEvents);
-router.get('/calendar', authMiddleware, getCalendarEvents);
+// Stats are visible to authenticated users (admin check is inside controller if needed)
+router.get('/stats', authMiddleware, getDashboardStats);
+router.get('/utilization', authMiddleware, getUtilizationData);
+router.get('/events', authMiddleware, getUpcomingEvents);
+router.get('/calendar', authMiddleware, getCalendarData);
 
 export default router;

@@ -1,6 +1,7 @@
 /**
  * Structured Context Injection (Phase 2A)
  */
+import { ragConfig } from './config.js';
 export function buildResourceContext(resources, userBookings = []) {
   const resourceBlock = resources.length > 0 
     ? resources.map((r, i) => `
@@ -36,24 +37,33 @@ export function buildResourceContext(resources, userBookings = []) {
 
 /**
  * Dynamic Context Budget Management (Phase 2B)
+ * FIX: Bug 5 - Replacing hardcoded 4096 limit with dynamic calculation from ragConfig
  */
-export const TOKEN_BUDGET = {
-  system_prompt: 800,
-  user_message: 200,
-  chat_history: 600,
-  resource_context: 2000,
-  schedule_context: 600,
-  response_buffer: 800,
-  total: 5000 
+export const getTokenBudget = () => {
+  const total = ragConfig.maxContextWindow || 128000;
+  return {
+    system_prompt: 1000,
+    user_message: 1000,
+    chat_history: Math.floor(total * 0.2),   // 20% for history
+    resource_context: Math.floor(total * 0.5), // 50% for resources
+    schedule_context: Math.floor(total * 0.1), // 10% for schedule
+    response_buffer: 2000,
+    total
+  };
 };
 
 export function estimateTokens(text) {
   if (!text) return 0;
-  return Math.ceil(text.length / 3.8); 
+  // Improved heuristic: 1 token ~= 4 chars for plain text, but ~3 chars for 
+  // structured data (Markdown/JSON/Code). We use 3.2 as a safer average.
+  const baseTokens = Math.ceil(text.length / 3.2);
+  // Add a 5% safety buffer for special characters and formatting
+  return Math.ceil(baseTokens * 1.05);
 }
 
 export function fitContextToBudget(resources, schedule, chatHistory) {
-  let budget = TOKEN_BUDGET.resource_context;
+  const budgetObj = getTokenBudget();
+  let budget = budgetObj.resource_context;
   const fittedResources = [];
 
   for (const resource of resources) {
@@ -64,7 +74,18 @@ export function fitContextToBudget(resources, schedule, chatHistory) {
     budget -= tokens;
   }
 
-  const historyBudget = TOKEN_BUDGET.chat_history;
+  // FIX: Bug 3 - Add iterative trimming for the schedule array
+  let scheduleBudget = budgetObj.schedule_context;
+  const fittedSchedule = [];
+  for (const item of schedule) {
+    const { scheduleBlock } = buildResourceContext([], [item]);
+    const tokens = estimateTokens(scheduleBlock);
+    if (scheduleBudget - tokens < 0) break;
+    fittedSchedule.push(item);
+    scheduleBudget -= tokens;
+  }
+
+  const historyBudget = budgetObj.chat_history;
   let fittedHistory = [...chatHistory].reverse();
   let historyTokens = 0;
   fittedHistory = fittedHistory.filter(msg => {
@@ -74,7 +95,7 @@ export function fitContextToBudget(resources, schedule, chatHistory) {
     return true;
   }).reverse();
 
-  return { fittedResources, fittedHistory };
+  return { fittedResources, fittedSchedule, fittedHistory };
 }
 
 /**
@@ -85,7 +106,8 @@ export const getSystemPrompt = (userName, role, resourceContext = '', scheduleCo
 
   return {
     role: "system",
-    content: `You are the ResourceFlow AI Assistant for ${userName?.toUpperCase() || 'USER'} (${role.toUpperCase()}).
+    content: `You are ResourceFlow AI, an intelligent booking and facility management assistant. 
+You are currently assisting the user named ${userName?.toUpperCase() || 'USER'} (Account Role: ${role.toUpperCase()}).
 
 ═══ THOUGHT PROCESS (MANDATORY) ═══
 Before responding, you MUST think step-by-step:
@@ -94,7 +116,17 @@ Before responding, you MUST think step-by-step:
 3. CONTEXT: Examine AVAILABLE RESOURCES and USER SCHEDULE.
 4. PERMISSION: Check if the user's role (${role}) is allowed to perform the requested action.
 5. CONFIRMATION: If the action is DELETE or CANCEL, check if the user has already said "YES" to a pending confirmation. If not, YOU MUST ASK for confirmation first.
-6. ACTION: Determine the necessary [ACTION_TAG].
+6. ACTION: Determine the necessary [ACTION_TAG] from the list below. If no defined action matches, respond in plain text only.
+7. FORMAT: When triggering an action, use the format: [ACTION_NAME: { "key": "value" }].
+
+═══ SUPPORTED ACTIONS (STRICT) ═══
+Only use these specific tags. Do NOT invent tags like SEARCH_RESOURCES.
+- [BOOK_ACTION: { "resource_id": "ID", "start_time": "ISO", "end_time": "ISO", "meeting_title": "string", "description": "string" }]
+- [CANCEL_BOOK_ACTION: { "booking_id": "ID" }]
+- [UPDATE_BOOKING_ACTION: { "booking_id": "ID", "start_time": "ISO", "end_time": "ISO" }]
+- [ADD_RESOURCE_ACTION: { "name": "string", "type": "string", "capacity": number, "location": "string" }]
+- [UPDATE_RESOURCE_ACTION: { "resource_id": "ID", "name": "string", "status": "available|unavailable" }]
+- [DELETE_RESOURCE_ACTION: { "resource_id": "ID" }]
 
 ═══ YOUR IDENTITY ═══
 You are ResourceFlow AI. You ONLY assist with resource booking, availability, and facility management.
@@ -109,8 +141,9 @@ YOU ARE THE ADMINISTRATOR.
 - Restrictions: CANNOT create bookings for yourself.
 ` : `
 YOU ARE AN EMPLOYEE.
-- Capabilities: Search resources, Create bookings, Manage YOUR OWN bookings.
+- Capabilities: View resources, Create bookings, Manage YOUR OWN bookings.
 - Restrictions: CANNOT delete or modify the resource catalog itself.
+- LISTING: When listing resources, use a numbered list with Name, Capacity, and Location.
 `}
 
 ═══ STRICTURES ═══

@@ -13,9 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  Calendar,
-  RefreshCw,
-  AlertTriangle
+  Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';

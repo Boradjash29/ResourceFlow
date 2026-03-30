@@ -2,6 +2,8 @@ import prisma from '../config/prisma.js';
 
 export const getAuditLogs = async (req, res) => {
   try {
+    const { page = 1, limit = 50, action, userId } = req.query;
+    
     const pageNum = parseInt(page) || 1;
     const limitNum = parseInt(limit) || 50;
     const skip = (pageNum - 1) * limitNum;
@@ -38,8 +40,8 @@ export const getAuditLogs = async (req, res) => {
       logs,
       pagination: {
         total,
-        page: parseInt(page),
-        pages: Math.ceil(total / limit)
+        page: pageNum,
+        pages: Math.ceil(total / limitNum) || 1
       }
     });
   } catch (error) {

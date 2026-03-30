@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users, Calendar, CheckCircle, Package } from 'lucide-react';
 
+// eslint-disable-next-line no-unused-vars
 const StatsCard = ({ title, value, icon: Icon, colorClass }) => (
   <div className="card flex items-center gap-4 py-5 px-6">
     <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${colorClass.replace('text-', 'bg-').split(' ')[0]}/10 ${colorClass.split(' ')[1]} dark:bg-zinc-950/50 dark:border dark:border-white/5`}>

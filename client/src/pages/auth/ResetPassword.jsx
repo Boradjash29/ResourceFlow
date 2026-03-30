@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../lib/api';
-import { Lock, Loader2, CheckCircle, ArrowRight, ShieldCheck, ShieldAlert, Shield } from 'lucide-react';
+import { Lock, Loader2, CheckCircle, ArrowRight, ShieldAlert } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const ResetPassword = () => {

@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useState, useEffect, useContext, useCallback, useRef } from 'react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
@@ -13,24 +14,65 @@ export const AuthProvider = ({ children }) => {
   const logoutTimerRef = useRef(null);
   const warningTimerRef = useRef(null);
 
+  const clearTimers = useCallback(() => {
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
+    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
+  }, []);
+
+  const logout = useCallback(async (message) => {
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setUser(null);
+      clearTimers();
+      if (message) toast.success(message);
+    }
+  }, [clearTimers]);
+
+  const resetInactivityTimer = useCallback(() => {
+    if (!user) return;
+    clearTimers();
+
+    warningTimerRef.current = setTimeout(() => {
+      toast('Your session will expire in 5 minutes due to inactivity.', {
+        icon: '⏳',
+        duration: 10000,
+      });
+    }, 25 * 60 * 1000);
+
+    logoutTimerRef.current = setTimeout(() => {
+      logout('Your session has expired due to inactivity.');
+    }, 30 * 60 * 1000);
+  }, [user, clearTimers, logout]);
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const response = await api.get('/auth/me');
-        setUser(response.data.user);
-        resetInactivityTimer();
-      } catch (error) {
+        setLoading(true);
+        const { data } = await api.get('/auth/me');
+        if (data && data.user) {
+          setUser(data.user);
+        }
+      } catch {
         setUser(null);
       } finally {
         setLoading(false);
       }
     };
     checkAuth();
+  }, []);
 
-    // Activity listeners
+  useEffect(() => {
+    if (!user) return;
+
     const handleActivity = () => {
-      lastActivityRef.current = Date.now();
-      resetInactivityTimer();
+      const now = Date.now();
+      if (now - lastActivityRef.current > 60000) {
+        lastActivityRef.current = now;
+        resetInactivityTimer();
+      }
     };
 
     window.addEventListener('mousemove', handleActivity);
@@ -45,30 +87,7 @@ export const AuthProvider = ({ children }) => {
       window.removeEventListener('click', handleActivity);
       clearTimers();
     };
-  }, []);
-
-  const clearTimers = () => {
-    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
-    if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
-  };
-
-  const resetInactivityTimer = useCallback(() => {
-    if (!user) return;
-    clearTimers();
-
-    // 25 mins warning
-    warningTimerRef.current = setTimeout(() => {
-      toast('Your session will expire in 5 minutes due to inactivity.', {
-        icon: '⏳',
-        duration: 10000,
-      });
-    }, 25 * 60 * 1000);
-
-    // 30 mins logout
-    logoutTimerRef.current = setTimeout(() => {
-      logout('Your session has expired due to inactivity.');
-    }, 30 * 60 * 1000);
-  }, [user]);
+  }, [user, resetInactivityTimer, clearTimers]);
 
   useEffect(() => {
     if (user) {
@@ -126,17 +145,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async (message) => {
-    try {
-      await api.post('/auth/logout');
-    } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      setUser(null);
-      clearTimers();
-      if (message) toast(message, { icon: '👋' });
-    }
-  };
+
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout, loading, validate2FA }}>

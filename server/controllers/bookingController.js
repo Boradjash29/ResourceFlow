@@ -1,9 +1,10 @@
 import prisma from '../config/prisma.js';
-// ...existing code...
+import { sanitize } from '../utils/sanitize.js';
 import { createBookingInternal } from '../services/bookingService.js';
 import { createAuditLog } from '../services/auditService.js';
 import { syncBookingToGoogle, removeBookingFromGoogle } from '../services/calendarService.js';
 import { emitToUser, emitToAll } from '../services/socketService.js';
+import { sendBookingConfirmationEmail, sendBookingUpdateEmail, sendBookingCancellationEmail } from '../services/emailService.js';
 
 export const getAllBookings = async (req, res) => {
   const { role, id: userId } = req.user;
@@ -22,10 +23,23 @@ export const getAllBookings = async (req, res) => {
     if (resource_id) where.resource_id = resource_id;
     if (status) where.status = status;
     
+    // FIX: Bug #4 — Invalid Date Causes 500 Crash
     if (start_date || end_date) {
       where.start_time = {};
-      if (start_date) where.start_time.gte = new Date(start_date);
-      if (end_date) where.start_time.lte = new Date(end_date);
+      if (start_date) {
+        const d = new Date(start_date);
+        if (isNaN(d.getTime())) {
+          return res.status(400).json({ message: "Invalid start_date format" });
+        }
+        where.start_time.gte = d;
+      }
+      if (end_date) {
+        const d = new Date(end_date);
+        if (isNaN(d.getTime())) {
+          return res.status(400).json({ message: "Invalid end_date format" });
+        }
+        where.start_time.lte = d;
+      }
     }
 
     if (search) {
@@ -175,15 +189,15 @@ export const cancelBooking = async (req, res) => {
         updatedBooking, 
         updatedBooking.resource
       );
-    } catch (e) {
-      console.error('Non-blocking Cancellation Email Error:', e);
+    } catch {
+      console.error('Non-blocking Cancellation Email Error');
     }
     
     // Feature 26: Calendar Sync Removal
     try {
       await removeBookingFromGoogle(updatedBooking.external_event_id, updatedBooking.user);
-    } catch (e) {
-      console.error('Non-blocking Calendar Sync Removal Error:', e);
+    } catch {
+      console.error('Non-blocking Calendar Sync Removal Error');
     }
 
     await createAuditLog({
@@ -206,6 +220,70 @@ export const cancelBooking = async (req, res) => {
     res.status(200).json({ message: 'Booking cancelled successfully' });
   } catch (error) {
     console.error('Error cancelling booking:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const updateBooking = async (req, res) => {
+  const { id } = req.params;
+  const { meeting_title, description, start_time, end_time, participants } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const existing = await prisma.booking.findUnique({
+      where: { id },
+      include: { resource: true, user: true }
+    });
+
+    if (!existing) return res.status(404).json({ message: 'Booking not found' });
+    if (existing.user_id !== userId && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Unauthorized' });
+    }
+
+    // Sanitize
+    const cleanTitle = meeting_title ? sanitize(meeting_title) : undefined;
+    const cleanDescription = description ? sanitize(description) : undefined;
+
+    const updated = await prisma.booking.update({
+      where: { id },
+      data: {
+        meeting_title: cleanTitle,
+        description: cleanDescription,
+        start_time: start_time ? new Date(start_time) : undefined,
+        end_time: end_time ? new Date(end_time) : undefined,
+        participants: participants || undefined,
+        updated_at: new Date()
+      },
+      include: { resource: true, user: true }
+    });
+
+    // Send Update Email
+    try {
+      await sendBookingUpdateEmail(updated.user.email, updated.user.name, updated, updated.resource);
+    } catch {
+      console.error('Non-blocking Update Email Error');
+    }
+
+    await createAuditLog({
+      userId,
+      action: 'UPDATE',
+      entityType: 'booking',
+      entityId: id,
+      details: { old: existing, new: updated },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    emitToUser(userId, 'notification', {
+      type: 'info',
+      title: 'Booking Updated',
+      message: `Your booking for ${updated.resource.name} has been updated.`
+    });
+    emitToAll('resource_updated', { resourceId: updated.resource_id });
+
+    res.status(200).json({ message: 'Booking updated successfully', booking: updated });
+  } catch (error) {
+    console.error('Error updating booking:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

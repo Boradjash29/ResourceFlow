@@ -10,6 +10,26 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Simple Retry Logic for Network Errors / 5xx (Phase 6B)
+api.interceptors.response.use(null, async (error) => {
+  const { config } = error;
+  if (!config || !config.retry) return Promise.reject(error);
+  
+  config.retryCount = config.retryCount || 0;
+  if (config.retryCount >= config.retry) return Promise.reject(error);
+  
+  config.retryCount += 1;
+  console.warn(`[API] Retrying request (${config.retryCount}/${config.retry}): ${config.url}`);
+  
+  // Exponential backoff
+  const backoff = new Promise((resolve) => {
+    setTimeout(() => resolve(), config.retryDelay || 1000);
+  });
+  
+  await backoff;
+  return api(config);
+});
+
 let isRefreshing = false;
 let failedQueue = [];
 
@@ -70,7 +90,8 @@ api.interceptors.response.use(
         const isPublicPage = publicPages.includes(normalizedPath);
 
         if (!isPublicPage && normalizedPath !== '/login') {
-            window.location.href = '/login';
+            // FIX: Bug #6 — Hard Page Reload on Axios 401 Breaks React State
+            window.dispatchEvent(new Event('auth:unauthorized'));
         }
         return Promise.reject(refreshError);
       } finally {

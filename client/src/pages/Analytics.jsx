@@ -40,6 +40,14 @@ const Analytics = () => {
     </div>
   );
 
+  if (!data || !data.summary) return (
+    <div className="flex flex-col items-center justify-center h-[60vh] bg-white dark:bg-zinc-900 rounded-3xl border border-dashed border-gray-200 dark:border-zinc-800">
+      <AlertCircle className="w-12 h-12 text-brand-lavender mb-4" />
+      <h3 className="text-xl font-bold text-[#1B2559] dark:text-white mb-2">No Analytics Data</h3>
+      <p className="text-brand-lavender text-center max-w-xs">We couldn't load the platform performance data. Please try again later.</p>
+    </div>
+  );
+
   const COLORS = ['#4318FF', '#6AD2FF', '#EFF4FB', '#1B2559'];
 
   return (

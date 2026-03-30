@@ -47,10 +47,18 @@ const ChatWidget = () => {
     try {
       const response = await api.post('/chat/message', { 
         messages: [...messages, userMsg] 
+      }, {
+        retry: 2,         // Retry twice
+        retryDelay: 1000  // 1 second delay between retries
       });
       setMessages(prev => [...prev, { role: 'assistant', content: response.data.message }]);
-    } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I am having trouble connecting to the server. Please check your internet connection and try again.' }]);
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || 'I am having trouble connecting to the server. Please check your connection.';
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `Error: ${errorMsg}`,
+        isError: true 
+      }]);
     } finally {
       setIsLoading(false);
     }

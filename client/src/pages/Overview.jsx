@@ -34,11 +34,16 @@ const Overview = () => {
   };
 
   const fetchUtilization = async () => {
+    if (user?.role !== 'admin') return;
     setLoadingUtilization(true);
     try {
       const res = await api.get(`/analytics/utilization?filter=${utilizationFilter}`);
       setUtilization(res.data);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      if (e.response?.status !== 403) {
+        console.error('Failed to fetch utilization');
+      }
+    }
     setLoadingUtilization(false);
   };
 
@@ -74,6 +79,7 @@ const Overview = () => {
   // Filter-only load
   useEffect(() => {
     if (!loading) {
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       fetchUtilization();
     }
   }, [utilizationFilter]);
@@ -108,18 +114,20 @@ const Overview = () => {
             <UpcomingEventsBanner events={events} />
           )}
           
-          <div className="relative">
-            <ProgressReportChart 
-              data={utilization} 
-              activeFilter={utilizationFilter}
-              onFilterChange={setUtilizationFilter}
-            />
-            {(loadingUtilization || !utilization.length) && (
-              <div className="absolute inset-0 bg-white/50 dark:bg-zinc-900/50 flex items-center justify-center rounded-3xl z-10">
-                <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-              </div>
-            )}
-          </div>
+          {user?.role === 'admin' && (
+            <div className="relative">
+              <ProgressReportChart 
+                data={utilization} 
+                activeFilter={utilizationFilter}
+                onFilterChange={setUtilizationFilter}
+              />
+              {(loadingUtilization || !utilization.length) && (
+                <div className="absolute inset-0 bg-white/50 dark:bg-zinc-900/50 flex items-center justify-center rounded-3xl z-10">
+                  <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
         
         {/* Right Column (Span 1) */}

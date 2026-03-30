@@ -19,7 +19,7 @@ export class ConversationMemory {
   }
 
   setPendingAction(type, data) {
-    this.entities.pendingConfirmation = { type, data, expires: Date.now() + 60000 };
+    this.entities.pendingConfirmation = { type, data, expires: Date.now() + 300000 };
   }
 
   getPendingAction() {
@@ -69,15 +69,23 @@ export class ConversationMemory {
     if (typeof userMessage !== 'string') return userMessage;
     
     let resolved = userMessage;
-    // Bug 8: Defined inside function for thread-safety and fresh lastIndex.
-    // 'g' is needed because a user might say "Cancel it and that one"
-    const itRefs = /\b(it|that one|this one|the same|that room|that vehicle|the resource)\b/gi;
+    // Refined pronoun resolution to avoid over-replacement
+    // We target only clear referential markers in specific contexts
+    const itRefs = /\b(that room|that vehicle|the resource|that one|this one|the same)\b/gi;
+    const genericIt = /\b(it|that)\b/gi;
 
-    if (itRefs.test(userMessage) && this.entities.lastMentionedResource) {
-      resolved = userMessage.replace(
-        itRefs,
-        `"${this.entities.lastMentionedResource.name}"`
-      );
+    if (this.entities.lastMentionedResource) {
+      const resourceName = `"${this.entities.lastMentionedResource.name}"`;
+      
+      // Always replace specific markers
+      resolved = userMessage.replace(itRefs, resourceName);
+      
+      // Only replace generic "it" if it appears in a likely referential position
+      // e.g. "book it", "cancel it", "show it", "where is it"
+      const referentialContext = /\b(book|reserve|cancel|delete|show|find|where is|status of)\s+(it|that)\b/i;
+      if (referentialContext.test(resolved)) {
+        resolved = resolved.replace(genericIt, resourceName);
+      }
     }
     return resolved;
   }

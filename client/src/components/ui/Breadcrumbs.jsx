@@ -28,20 +28,29 @@ const Breadcrumbs = () => {
       {pathnames.map((value, index) => {
         const last = index === pathnames.length - 1;
         const to = `/dashboard/${pathnames.slice(0, index + 1).join('/')}`;
+        
+        const formatTitle = (val) => {
+          // Check if the path segment is a UUID
+          const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+          if (uuidRegex.test(val)) return 'Details';
+          return val.replace(/-/g, ' ');
+        };
+
+        const title = formatTitle(value);
 
         return (
           <React.Fragment key={to}>
             <ChevronRight className="w-4 h-4 text-brand-lavender/40" aria-hidden="true" />
             {last ? (
               <span className="text-brand-blue dark:text-white capitalize font-bold">
-                {value.replace(/-/g, ' ')}
+                {title}
               </span>
             ) : (
               <Link 
                 to={to} 
                 className="text-brand-lavender hover:text-brand-blue transition-colors capitalize"
               >
-                {value.replace(/-/g, ' ')}
+                {title}
               </Link>
             )}
           </React.Fragment>

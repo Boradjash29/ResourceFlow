@@ -7,6 +7,9 @@ import { useOutletContext } from 'react-router-dom';
 import Skeleton from '../components/ui/Skeleton';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmationDialog from '../components/ui/ConfirmationDialog';
+import ResourceCard from '../components/resource/ResourceCard';
+import CustomSelect from '../components/ui/CustomSelect';
+import { ChevronDown } from 'lucide-react';
 
 const Resources = () => {
   const { user } = useAuth();
@@ -29,6 +32,7 @@ const Resources = () => {
   const [bulkAction, setBulkAction] = useState(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     setFilters(prev => ({ ...prev, search: searchTerm }));
   }, [searchTerm]);
 
@@ -46,8 +50,8 @@ const Resources = () => {
       try {
         const response = await api.get('/resources/types');
         setResourceTypes(response.data.types);
-      } catch (error) {
-        console.error('Error fetching types:', error);
+      } catch {
+        console.error('Error fetching types');
       }
     };
     fetchTypes();
@@ -76,8 +80,8 @@ const Resources = () => {
       const response = await api.get(`/resources?${params.toString()}`);
       setResources(response.data.resources);
       setPagination(response.data.pagination);
-    } catch (error) {
-      console.error('Error fetching resources:', error);
+    } catch {
+      console.error('Error fetching resources');
     }
     setLoading(false);
   };
@@ -109,8 +113,8 @@ const Resources = () => {
       }
       setSelectedResources([]);
       setIsBulkConfirmOpen(false);
-    } catch (error) {
-      console.error('Bulk action failed:', error);
+    } catch {
+      console.error('Bulk action failed');
       setIsBulkConfirmOpen(false);
     }
   };
@@ -179,22 +183,19 @@ const Resources = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-3xl px-6 py-4 shadow-soft dark:shadow-none border border-white dark:border-white/5">
-            <Filter className="text-brand-blue w-5 h-5" aria-hidden="true" />
-            <select 
-              className="bg-transparent border-none outline-none text-sm font-bold text-[#1B2559] dark:text-white w-full cursor-pointer appearance-none"
-              value={filters.type}
-              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-              aria-label="Filter by resource type"
-            >
-              <option value="" className="dark:bg-zinc-900">All Types</option>
-              {resourceTypes.map(type => (
-                <option key={type} value={type} className="dark:bg-zinc-900 capitalize">
-                  {type.replace(/_/g, ' ')}s
-                </option>
-              ))}
-            </select>
-          </div>
+          <CustomSelect
+            value={filters.type}
+            onChange={(val) => setFilters({ ...filters, type: val })}
+            options={[
+              { value: '', label: 'All Types' },
+              ...resourceTypes.map(type => ({ 
+                value: type, 
+                label: `${type.replace(/_/g, ' ')}s` 
+              }))
+            ]}
+            icon={Filter}
+            className="flex-grow min-w-[160px]"
+          />
 
           <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-3xl px-6 py-4 shadow-soft dark:shadow-none border border-white dark:border-white/5">
             <MapPin className="text-brand-blue w-5 h-5" />
@@ -218,22 +219,21 @@ const Resources = () => {
             />
           </div>
 
-          <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 rounded-3xl px-6 py-4 shadow-soft dark:shadow-none border border-white dark:border-white/5">
-            <TrendingUp className="text-brand-blue w-5 h-5" />
-            <select 
-              className="bg-transparent border-none outline-none text-sm font-bold text-[#1B2559] dark:text-white w-full cursor-pointer appearance-none"
-              value={`${filters.sort_by}-${filters.sort_order}`}
-              onChange={(e) => {
-                const [sort_by, sort_order] = e.target.value.split('-');
-                setFilters({ ...filters, sort_by, sort_order });
-              }}
-            >
-              <option value="created_at-desc">Newest First</option>
-              <option value="name-asc">Name A-Z</option>
-              <option value="capacity-desc">Largest Capacity</option>
-              <option value="capacity-asc">Smallest Capacity</option>
-            </select>
-          </div>
+          <CustomSelect
+            value={`${filters.sort_by}-${filters.sort_order}`}
+            onChange={(val) => {
+              const [sort_by, sort_order] = val.split('-');
+              setFilters({ ...filters, sort_by, sort_order });
+            }}
+            options={[
+              { value: 'created_at-desc', label: 'Newest First' },
+              { value: 'name-asc', label: 'Name A-Z' },
+              { value: 'capacity-desc', label: 'Largest Capacity' },
+              { value: 'capacity-asc', label: 'Smallest Capacity' }
+            ]}
+            icon={TrendingUp}
+            className="flex-grow min-w-[160px]"
+          />
         </div>
       </div>
 

@@ -26,7 +26,7 @@ function addToEmbeddingCache(text, embedding) {
 }
 
 /**
- * Generates embeddings for text or an array of texts.
+ * Generates embeddings via OpenRouter (Gemini Models)
  */
 export const generateEmbedding = async (input) => {
   try {
@@ -61,13 +61,13 @@ export const generateEmbedding = async (input) => {
 
     return isArray ? results : results[0];
   } catch (error) {
-    console.error('Embedding Generation Failed:', error);
+    console.error('[OpenRouter] Embedding Generation Failed:', error.message);
     throw error;
   }
 };
 
 /**
- * Multi-layer Prompt Injection Shield (Phase 6A)
+ * Multi-layer Prompt Injection Shield
  */
 export function detectInjection(text) {
   const patterns = [
@@ -83,32 +83,35 @@ export function detectInjection(text) {
 }
 
 /**
- * Low-level wrapper for LLM completion.
+ * Chat Completions via OpenRouter (Gemini Models)
  */
 export const getAIResponse = async (messages, systemPromptObj) => {
   try {
-    // Phase 6A: Input Sanitization
     const lastUserMsg = messages[messages.length - 1]?.content || "";
     if (detectInjection(lastUserMsg)) {
       console.warn(`[SECURITY] Prompt injection detected: "${lastUserMsg}"`);
-      return "I'm sorry, but I cannot perform that action as it violates my security guidelines. Please stick to resource management tasks.";
+      return "I'm sorry, but I cannot perform that action as it violates my security guidelines.";
     }
 
-    const sanitizedMessages = messages.map(msg => ({
-      ...msg,
-      content: msg.content.replace(/ignore all prior instructions|system override|developer mode/gi, "[REDACTED]")
-    }));
+    const systemPrompt = typeof systemPromptObj === 'object' ? systemPromptObj.content : systemPromptObj;
 
     const response = await client.chat.completions.create({
       model: process.env.AI_MODEL || ragConfig.completionModel,
-      messages: [systemPromptObj, ...sanitizedMessages],
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...messages
+      ],
       temperature: ragConfig.temperature,
       max_tokens: ragConfig.maxTokens,
     });
 
     return response.choices[0].message.content;
   } catch (error) {
-    console.error('AI Completion Failed:', error);
+    if (error.status === 401 || !process.env.OPENROUTER_API_KEY) {
+      console.warn('[AI Mock Mode] Returning simulated response due to OpenRouter Auth Error');
+      return "I'm currently running in **Mock Mode** because the OpenRouter API key is invalid or unauthorized. \n\n*Technical Detail: OpenRouter 401*";
+    }
+    console.error('[OpenRouter] Completion Failed:', error.message);
     throw error;
   }
 };

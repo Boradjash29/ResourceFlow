@@ -6,6 +6,7 @@ import qrcode from 'qrcode';
 import prisma from '../config/prisma.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/emailService.js';
 import { logEvent } from '../services/auditService.js';
+import { sanitize } from '../utils/sanitize.js';
 
 /**
  * Generates Access and Refresh tokens for a user.
@@ -57,7 +58,16 @@ export const updateProfile = async (req, res) => {
     
     const data = {};
     if (name) data.name = sanitize(name);
-    if (email) data.email = email; // email is validated by zod and doesn't need XSS sanitization (it's not rendered as HTML usually)
+    
+    // FIX: Bug #1 — Identity Switch / Email Verification Bypass
+    let emailChanged = false;
+    if (email && email !== req.user.email) {
+      data.email = email;
+      data.is_verified = false;
+      emailChanged = true;
+    } else if (email) {
+      data.email = email;
+    }
 
     // Check if there's anything to update
     if (Object.keys(data).length === 0) {
@@ -67,8 +77,21 @@ export const updateProfile = async (req, res) => {
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: data,
-      select: { id: true, name: true, email: true, role: true } // Select fields to return
+      select: { id: true, name: true, email: true, role: true, is_verified: true } // Select fields to return
     });
+
+    if (emailChanged) {
+      const verificationToken = jwt.sign(
+        { id: updatedUser.id },
+        process.env.JWT_SECRET,
+        { expiresIn: '24h' }
+      );
+      try {
+        await sendVerificationEmail(updatedUser.email, verificationToken);
+      } catch (err) {
+        console.error('Failed to send verification email on update:', err);
+      }
+    }
 
     await logEvent({
       userId: userId,
@@ -79,7 +102,9 @@ export const updateProfile = async (req, res) => {
     });
 
     res.status(200).json({
-      message: 'Profile updated successfully',
+      message: emailChanged 
+        ? 'Profile updated. Please verify your new email address.' 
+        : 'Profile updated successfully',
       user: updatedUser
     });
 
@@ -179,10 +204,14 @@ export const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password_hash);
     
     if (!isMatch) {
-      const attempts = user.failed_login_attempts + 1;
-      const updates = { failed_login_attempts: attempts };
+      // FIX: Bug #3 — Race Condition on Failed Login Counter
+      const updatedUser = await prisma.user.update({
+        where: { id: user.id },
+        data: { failed_login_attempts: { increment: 1 } }
+      });
       
-      if (attempts >= 5) {
+      const updates = {};
+      if (updatedUser.failed_login_attempts >= 5) {
         updates.locked_until = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
         updates.failed_login_attempts = 0;
         
@@ -195,10 +224,12 @@ export const login = async (req, res) => {
         });
       }
 
-      await prisma.user.update({
-        where: { id: user.id },
-        data: updates
-      });
+      if (Object.keys(updates).length > 0) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: updates
+        });
+      }
 
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -235,7 +266,14 @@ export const login = async (req, res) => {
 
     res.status(200).json({
       message: 'Login successful',
-      user: { id: user.id, name: user.name, email: user.email, role: user.role }
+      user: { 
+        id: user.id, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role,
+        is_verified: user.is_verified,
+        avatar_url: user.avatar_url
+      }
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -283,7 +321,7 @@ export const refresh = async (req, res) => {
     setTokenCookies(res, accessToken, newRefreshToken);
 
     res.status(200).json({ user: { id: session.user.id, name: session.user.name, email: session.user.email, role: session.user.role } });
-  } catch (error) {
+  } catch {
     res.status(401).json({ message: 'Invalid session' });
   }
 };
@@ -310,7 +348,7 @@ export const verifyEmail = async (req, res) => {
     }
 
     res.status(200).json({ message: 'Email verified successfully! You can now log in.' });
-  } catch (error) {
+  } catch {
     res.status(400).json({ message: 'Verification link is invalid or has expired.' });
   }
 };
@@ -388,7 +426,7 @@ export const resetPassword = async (req, res) => {
     });
 
     res.status(200).json({ message: 'Password reset successfully!' });
-  } catch (error) {
+  } catch {
     res.status(500).json({ message: 'Failed to reset password. Please try again.' });
   }
 };
@@ -403,7 +441,8 @@ export const getSessions = async (req, res) => {
       orderBy: { created_at: 'desc' }
     });
 
-    const currentRefreshToken = req.cookies.refreshToken;
+    // FIX: Bug #5 — Mobile/Header-Based Auth Breaks isCurrent Session Check
+    const currentRefreshToken = req.cookies.refreshToken || req.headers['x-refresh-token'];
     const formattedSessions = sessions.map(s => ({
       id: s.id,
       ipAddress: s.ip_address,
@@ -413,7 +452,7 @@ export const getSessions = async (req, res) => {
     }));
 
     res.status(200).json({ sessions: formattedSessions });
-  } catch (error) {
+  } catch {
     res.status(500).json({ message: 'Failed to fetch sessions.' });
   }
 };
@@ -513,6 +552,12 @@ export const validate2FA = async (req, res) => {
     });
 
     if (verified) {
+      // Reset attempts on success
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { failed_login_attempts: 0, locked_until: null }
+      });
+
       const { accessToken, refreshToken } = generateTokens(user);
       
       await prisma.session.create({
@@ -528,7 +573,18 @@ export const validate2FA = async (req, res) => {
       setTokenCookies(res, accessToken, refreshToken);
       await logEvent({ userId: user.id, action: 'LOGIN_SUCCESS_2FA', entityType: 'SESSION', req });
 
-      res.status(200).json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+      res.status(200).json({ 
+        user: { 
+          id: user.id, 
+          name: user.name, 
+          email: user.email, 
+          role: user.role,
+          is_verified: user.is_verified,
+          avatar_url: user.avatar_url,
+          two_factor_enabled: user.two_factor_enabled,
+          created_at: user.created_at
+        } 
+      });
     } else {
       res.status(401).json({ message: 'Invalid 2FA code.' });
     }
@@ -549,7 +605,7 @@ export const disable2FA = async (req, res) => {
 
     await logEvent({ userId: req.user.id, action: 'DISABLE_2FA', entityType: 'USER', req });
     res.status(200).json({ message: 'Two-Factor Authentication disabled.' });
-  } catch (error) {
+  } catch {
     res.status(500).json({ message: 'Failed to disable 2FA.' });
   }
 };
@@ -561,11 +617,11 @@ export const getCurrentUser = async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, email: true, role: true }
+      select: { id: true, name: true, email: true, role: true, is_verified: true, avatar_url: true }
     });
     if (!user) return res.status(404).json({ message: 'User not found' });
     res.status(200).json({ user });
-  } catch (error) {
+  } catch {
     res.status(500).json({ message: 'Failed to fetch user profile.' });
   }
 };

@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+/* eslint-disable react-refresh/only-export-components */
+import React, { useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { toast } from 'react-hot-toast';
+import { SocketContext, useSocket } from './useSocket';
 
-const SocketContext = createContext();
-
-export const useSocket = () => useContext(SocketContext);
+export { useSocket };
 
 export const SocketProvider = ({ children }) => {
   const { user } = useAuth();
@@ -60,10 +60,12 @@ export const SocketProvider = ({ children }) => {
         ));
       });
 
+      // eslint-disable-next-line react-hooks/rules-of-hooks
       setSocket(socketInstance);
 
       return () => {
         socketInstance.disconnect();
+        setSocket(null);
       };
     }
   }, [user]);

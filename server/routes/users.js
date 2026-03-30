@@ -1,7 +1,7 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'path';
-import { updateProfile, changePassword, updateAvatar, deleteAccount } from '../controllers/userController.js';
+import { updateProfile, changePassword, updateAvatar, deleteAvatar, deleteAccount } from '../controllers/userController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -31,6 +31,7 @@ router.use(authMiddleware);
 router.put('/profile', updateProfile);
 router.put('/change-password', changePassword);
 router.post('/avatar', upload.single('avatar'), updateAvatar);
+router.delete('/avatar', deleteAvatar);
 router.delete('/', deleteAccount);
 
 export default router;

@@ -79,7 +79,7 @@ model Embedding {
   id               String                 @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   resource_id      String                 @db.Uuid
   content          String
-  embedding_vector Unsupported("vector")?
+  embedding_vector Unsupported("vector")? // GEMINI: vector(768)
   metadata         Json?
   created_at       DateTime?              @default(now()) @db.Timestamp(6)
   updated_at       DateTime?              @default(now()) @db.Timestamp(6)

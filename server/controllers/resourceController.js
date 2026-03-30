@@ -1,5 +1,6 @@
 import prisma from '../config/prisma.js';
 import { createAuditLog } from '../services/auditService.js';
+import { syncSingleResource } from '../rag/embeddings.js';
 
 export const getResourceTypes = async (req, res) => {
   try {
@@ -111,6 +112,13 @@ export const createResource = async (req, res) => {
       userAgent: req.headers['user-agent']
     });
 
+    // Sync (Phase 2D) - Awaited for better reliability
+    try {
+      await syncSingleResource(resource.id);
+    } catch (err) {
+      console.error('Failed to sync new resource:', err);
+    }
+
     res.status(201).json({ message: 'Resource created successfully', resource });
   } catch (error) {
     console.error('Error creating resource:', error);
@@ -163,6 +171,13 @@ export const updateResource = async (req, res) => {
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
     });
+
+    // Sync (Phase 2D) - Awaited for better reliability
+    try {
+       await syncSingleResource(resource.id);
+    } catch (err) {
+       console.error('Failed to sync updated resource:', err);
+    }
 
     res.status(200).json({ message: 'Resource updated successfully', resource });
   } catch (error) {
@@ -237,6 +252,9 @@ export const bulkUpdateResources = async (req, res) => {
     });
 
     res.status(200).json({ message: `Successfully updated ${result.count} resources`, count: result.count });
+
+    // Bulk background sync
+    Promise.all(ids.map(id => syncSingleResource(id))).catch(err => console.error('Failed bulk sync:', err));
   } catch (error) {
     console.error('Bulk update error:', error);
     res.status(500).json({ message: 'Internal server error' });

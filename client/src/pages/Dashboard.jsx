@@ -20,14 +20,17 @@ const Dashboard = () => {
     const path = location.pathname;
     if (path.includes('manage-resources')) return 'manage-resources';
     if (path.includes('audit-logs')) return 'audit-logs';
+    if (path.includes('analytics')) return 'analytics';
     if (path.includes('resources')) return 'resources';
     if (path.includes('bookings')) return 'bookings';
+    if (path.includes('settings')) return 'settings';
+    if (path.includes('profile')) return 'profile';
     return 'overview';
   };
 
   const activeTab = getActiveTab();
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
   const [selectedResource, setSelectedResource] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return localStorage.getItem('theme') === 'dark';
   });
@@ -45,6 +48,7 @@ const Dashboard = () => {
   const isAdmin = user?.role === 'admin';
 
   const handleBookingSuccess = () => {
+    setIsBookingModalOpen(false);
     setSelectedResource(null);
     navigate('/dashboard/bookings');
   };
@@ -98,7 +102,7 @@ const Dashboard = () => {
         </div>
 
         <nav className="flex-grow space-y-2">
-          {navItems.map((item) => (
+          {(!isAdmin ? navItems : navItems.filter(item => item.id === 'settings')).map((item) => (
             <button
               key={item.id}
               onClick={() => navigate(item.id === 'overview' ? '/dashboard' : `/dashboard/${item.id}`)}
@@ -163,17 +167,6 @@ const Dashboard = () => {
           </div>
 
           <div className="flex items-center gap-4 bg-brand-bg/50 dark:bg-zinc-950/50 p-2 rounded-3xl border border-white dark:border-white/5">
-            <div className="relative">
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                className="bg-transparent border-none outline-none py-1.5 pl-4 pr-10 text-sm w-64 placeholder:text-brand-lavender dark:placeholder:text-zinc-500 dark:text-white"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-            
-            <div className="h-6 w-px bg-gray-200 dark:bg-white/10"></div>
             <button 
               onClick={() => setIsDarkMode(!isDarkMode)}
               aria-label={isDarkMode ? "Switch to light mode" : "Switch to dark mode"}
@@ -187,7 +180,7 @@ const Dashboard = () => {
 
             <button
               className="flex items-center gap-2 group bg-transparent border-none outline-none cursor-pointer"
-              onClick={() => navigate('/profile')}
+              onClick={() => navigate('/dashboard/profile')}
               title="View Profile"
             >
               <div className="h-8 w-8 bg-brand-blue/10 rounded-full flex items-center justify-center text-brand-blue group-hover:bg-brand-blue/20 transition-colors">
@@ -202,15 +195,24 @@ const Dashboard = () => {
         </header>
 
         <main className="w-full px-4 lg:px-10 pb-10">
-          <Outlet context={{ searchTerm, onBook: (resource) => setSelectedResource(resource) }} />
+          <Outlet context={{ 
+            searchTerm: '', 
+            onBook: (resource) => {
+              setSelectedResource(resource);
+              setIsBookingModalOpen(true);
+            } 
+          }} />
         </main>
       </div>
 
       {/* Booking Modal */}
-      {selectedResource && (
+      {isBookingModalOpen && (
         <BookingForm 
           resource={selectedResource} 
-          onClose={() => setSelectedResource(null)}
+          onClose={() => {
+            setIsBookingModalOpen(false);
+            setSelectedResource(null);
+          }}
           onSuccess={handleBookingSuccess}
         />
       )}

@@ -57,12 +57,12 @@ export class ActionHandler {
           }
           
           // Bug 3: Strict Mandatory confirmation for destructive actions
-          const isDestructive = ['CANCEL_BOOK_ACTION', 'DELETE_RESOURCE_ACTION'].includes(type);
+          const isDestructive = ['DELETE_RESOURCE_ACTION', 'UPDATE_BOOKING_ACTION'].includes(type);
           const pending = this.memory.getPendingAction();
-          const lastUserMsg = this.req.body.messages.slice(-1)[0].content.trim().toUpperCase();
-          const isConfirmed = lastUserMsg === 'YES' && pending && pending.type === type;
-
+          const isConfirmed = !!(this.req.isAIConfirmed && pending && pending.type === type);
+          
           if (isDestructive && !isConfirmed) {
+            console.log(`[ActionHandler] Confirmation still needed for ${type}. (AI-Confirmed: ${this.req.isAIConfirmed}, Pending: ${!!pending})`);
             // Use uuid as unique actionId if available
             const actionId = actionData.resource_id || actionData.booking_id || Math.random().toString(36).substring(7);
             this.memory.setPendingAction(type, { ...actionData, actionId });
@@ -100,7 +100,8 @@ export class ActionHandler {
     // Phase 6B: Comprehensive Response Sanitization
     this.processedText = this.processedText
       .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, '[ID_REDACTED]')
-      .replace(/\[[A-Z_]+_ACTION:.*?\]/gi, '') // residual tags
+      .replace(/\[(?:ACTION_TAG|ACTION|TAG):\s*.*?\]/gi, '') // residual or halluncinated tags
+      .replace(/\[[A-Z_]+_ACTION:.*?\]/gi, '') // residual standard tags
       .replace(/\[(RES|BOOK|USER)_ID:[^\]]+\]/gi, '')
       .replace(/\s{2,}/g, ' ')
       .trim();
@@ -340,37 +341,67 @@ export class ActionHandler {
   }
 
   async resolveResourceId(placeholder) {
-    // 1. History scan
-    const historyText = this.messages.slice(-5).map(m => m.content).join(' ') + ' ' + this.aiText;
-    const matchInHistory = this.relevantResources.find(r => 
-      historyText.toLowerCase().includes(r.name.toLowerCase())
-    );
-    if (matchInHistory) return matchInHistory.id;
+    if (!placeholder) throw new Error('Resource identifier is missing.');
 
-    // 2. Name search
-    const cleanName = placeholder.replace(/[_-]/g, ' ').replace(/resource_id|uuid|actual/gi, '').trim();
-    if (cleanName.length > 2) {
-      const dbMatch = await prisma.resource.findFirst({
-        where: { name: { contains: cleanName, mode: 'insensitive' } },
-        select: { id: true }
+    // 1. Exact Match Scan (Primary)
+    const cleanPlaceholder = placeholder.toString().replace(/[_-]/g, ' ').replace(/resource_id|uuid|actual/gi, '').trim();
+    
+    const dbExactMatch = await prisma.resource.findFirst({
+      where: {
+        OR: [
+          { name: { equals: cleanPlaceholder, mode: 'insensitive' } },
+          { name: { contains: cleanPlaceholder, mode: 'insensitive' } }
+        ]
+      },
+      select: { id: true, name: true }
+    });
+    if (dbExactMatch) return dbExactMatch.id;
+
+    // 2. Converstation History Scan (Contextual)
+    // We look at all messages in the current session to find previously mentioned resource names
+    const allMessagesText = this.messages.map(m => m.content).join(' ').toLowerCase();
+    
+    // If the placeholder is a partial name (like "32") and "Room 32" was in the history
+    if (cleanPlaceholder.length >= 1) {
+      const candidates = await prisma.resource.findMany({
+        where: {
+          OR: [
+            { name: { contains: cleanPlaceholder, mode: 'insensitive' } },
+            { description: { contains: cleanPlaceholder, mode: 'insensitive' } }
+          ]
+        },
+        select: { id: true, name: true }
       });
-      if (dbMatch) return dbMatch.id;
+
+      for (const cand of candidates) {
+        if (allMessagesText.includes(cand.name.toLowerCase())) {
+          console.log(`[ActionHandler] Resolved "${placeholder}" to "${cand.name}" via history match.`);
+          return cand.id;
+        }
+      }
+      
+      // If we only have ONE candidate that matches the name partially, take it
+      if (candidates.length === 1) return candidates[0].id;
     }
 
-    throw new Error(`Could not identify resource "${placeholder}". Please specify it clearly by name.`);
+    throw new Error(`Could not identify resource "${placeholder}". Please specify it clearly by name (e.g., "Room 32").`);
   }
 
   tryLenientParse(jsonString) {
     try {
       return JSON.parse(jsonString);
     } catch (e) {
-      // Lenient fix: Add missing quotes to keys, handle trailing commas
+      // Robust JSON Repair: Handle missing quotes, trailing commas, and single quotes
       let fixed = jsonString
-        .replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3') // quote keys
-        .replace(/,\s*([}\]])/g, '$1'); // remove trailing commas
+        .replace(/'/g, '"') // Swap single to double quotes
+        .replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3') // Quote unquoted keys
+        .replace(/:\s*'([^']*)'/g, ': "$1"') // Quote values if single quoted
+        .replace(/,\s*([}\]])/g, '$1'); // Remove trailing commas
+      
       try {
         return JSON.parse(fixed);
       } catch (e2) {
+        console.error('[ActionHandler] Failed to repair JSON:', jsonString, e2.message);
         return null;
       }
     }

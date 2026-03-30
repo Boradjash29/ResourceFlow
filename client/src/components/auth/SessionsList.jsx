@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../../lib/api';
 import { Monitor, Smartphone, Globe, X, Loader2, Clock, Shield } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const SessionsList = () => {
   const [sessions, setSessions] = useState([]);
@@ -38,17 +38,30 @@ const SessionsList = () => {
   const getDeviceIcon = (userAgent) => {
     if (!userAgent) return <Globe className="w-5 h-5" />;
     const ua = userAgent.toLowerCase();
-    if (ua.includes('mobi') || ua.includes('android') || ua.includes('iphone')) return <Smartphone className="w-5 h-5" />;
+    
+    if (ua.includes('mobi') || ua.includes('tablet') || ua.includes('android') || ua.includes('ios') || ua.includes('iphone') || ua.includes('ipad')) {
+      return <Smartphone className="w-5 h-5" />;
+    }
     return <Monitor className="w-5 h-5" />;
   };
 
   const formatUA = (userAgent) => {
     if (!userAgent) return 'Unknown Device';
-    if (userAgent.includes('Windows')) return 'Chrome on Windows';
-    if (userAgent.includes('Macintosh')) return 'Safari on Mac';
-    if (userAgent.includes('iPhone')) return 'iPhone';
-    if (userAgent.includes('Android')) return 'Android Device';
-    return userAgent.split(' ').slice(0, 2).join(' ');
+    
+    let browser = 'Unknown Browser';
+    if (userAgent.includes('Firefox')) browser = 'Firefox';
+    else if (userAgent.includes('Edg/')) browser = 'Edge';
+    else if (userAgent.includes('Chrome')) browser = 'Chrome';
+    else if (userAgent.includes('Safari')) browser = 'Safari';
+    
+    let os = 'Unknown OS';
+    if (userAgent.includes('Windows')) os = 'Windows';
+    else if (userAgent.includes('Mac OS') || userAgent.includes('Macintosh')) os = 'Mac';
+    else if (userAgent.includes('Android')) os = 'Android';
+    else if (userAgent.includes('iPhone') || userAgent.includes('iPad')) os = 'iOS';
+    else if (userAgent.includes('Linux')) os = 'Linux';
+
+    return `${browser} on ${os}`;
   };
 
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>;
@@ -57,8 +70,8 @@ const SessionsList = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h3 className="text-lg font-bold text-[#1B2559]">Active Sessions</h3>
-          <p className="text-sm font-medium text-brand-lavender">Manage the devices currently logged into your account.</p>
+          <h3 className="text-lg font-bold text-[#1B2559] dark:text-white">Active Sessions</h3>
+          <p className="text-sm font-medium text-brand-lavender dark:text-zinc-400">Manage the devices currently logged into your account.</p>
         </div>
         <Shield className="w-5 h-5 text-brand-blue/40" />
       </div>
@@ -72,18 +85,20 @@ const SessionsList = () => {
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             className={`p-4 rounded-2xl border flex items-center justify-between transition-all ${
-              session.isCurrent ? 'bg-brand-blue/5 border-brand-blue' : 'bg-gray-50 border-gray-100'
+              session.isCurrent 
+                ? 'bg-brand-blue/5 dark:bg-brand-blue/10 border-brand-blue' 
+                : 'bg-gray-50 dark:bg-zinc-800/50 border-gray-100 dark:border-white/5'
             }`}
           >
             <div className="flex items-center gap-4">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
-                session.isCurrent ? 'bg-brand-blue text-white' : 'bg-white text-[#1B2559] border'
+                session.isCurrent ? 'bg-brand-blue text-white' : 'bg-white dark:bg-zinc-900 text-[#1B2559] dark:text-white border dark:border-white/5'
               }`}>
                 {getDeviceIcon(session.userAgent)}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-[#1B2559]">{formatUA(session.userAgent)}</span>
+                  <span className="text-sm font-bold text-[#1B2559] dark:text-white">{formatUA(session.userAgent)}</span>
                   {session.isCurrent && (
                     <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue text-[10px] font-extrabold uppercase rounded-full">
                       Current
@@ -105,7 +120,7 @@ const SessionsList = () => {
               <button
                 onClick={() => handleRevoke(session.id)}
                 disabled={revokingId === session.id}
-                className="p-2 hover:bg-red-50 text-brand-lavender hover:text-danger rounded-lg transition-colors"
+                className="p-2 hover:bg-red-50 dark:hover:bg-danger/10 text-brand-lavender hover:text-danger rounded-lg transition-colors"
                 title="Revoke Session"
               >
                 {revokingId === session.id ? (

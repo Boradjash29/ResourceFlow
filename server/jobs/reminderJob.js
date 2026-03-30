@@ -9,7 +9,6 @@ import { sendBookingReminderEmail } from '../services/emailService.js';
 export const initReminderJob = () => {
   // Run every 15 minutes
   cron.schedule('*/15 * * * *', async () => {
-    console.log('⏰ Running Booking Reminder Job...');
     
     try {
       const now = new Date();
@@ -32,7 +31,6 @@ export const initReminderJob = () => {
         }
       });
 
-      console.log(`Found ${upcomingBookings.length} upcoming bookings for reminders.`);
 
       for (const booking of upcomingBookings) {
         try {

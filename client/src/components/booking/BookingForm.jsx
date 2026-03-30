@@ -8,8 +8,12 @@ const bookingSchema = z.object({
   meeting_title: z.string().min(3, 'Title must be at least 3 characters').max(100),
   description: z.string().max(500).optional(),
   date: z.string().min(1, 'Date is required'),
-  startTime: z.string().min(1, 'Time is required'),
-  duration: z.string().min(1, 'Duration is required'),
+  startHour: z.string(),
+  startMinute: z.string(),
+  startPeriod: z.enum(['AM', 'PM']),
+  endHour: z.string(),
+  endMinute: z.string(),
+  endPeriod: z.enum(['AM', 'PM']),
   participants: z.string().optional(),
 });
 
@@ -18,8 +22,12 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
     meeting_title: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
-    startTime: '09:00',
-    duration: '60',
+    startHour: '09',
+    startMinute: '00',
+    startPeriod: 'AM',
+    endHour: '10',
+    endMinute: '00',
+    endPeriod: 'AM',
     participants: '',
     recurrence_rule: 'NONE'
   });
@@ -31,35 +39,76 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
   const [errors, setErrors] = useState({});
   const [suggestions, setSuggestions] = useState([]);
 
-  const checkAvailability = useCallback(async (data) => {
-    if (!data.date || !data.startTime || !data.duration) return;
+  const hours = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const minutes = ['00', '15', '30', '45'];
+  
+  // NEW: Support for selecting a resource if none provided
+  const [allResources, setAllResources] = useState([]);
+  const [selectedResourceId, setSelectedResourceId] = useState(resource?.id || '');
+  const [isFetchingResources, setIsFetchingResources] = useState(false);
+
+  const to24h = (h, m, period) => {
+    let hh = parseInt(h);
+    if (period === 'PM' && hh < 12) hh += 12;
+    if (period === 'AM' && hh === 12) hh = 0;
+    return `${hh.toString().padStart(2, '0')}:${m}`;
+  };
+
+  const checkAvailability = useCallback(async (data, resId) => {
+    const targetId = resId || selectedResourceId;
+    const startTime24 = to24h(data.startHour, data.startMinute, data.startPeriod);
+    const endTime24 = to24h(data.endHour, data.endMinute, data.endPeriod);
+
+    if (!data.date || !startTime24 || !endTime24 || !targetId) return;
     
     setIsChecking(true);
     try {
-      const startDateTime = new Date(`${data.date}T${data.startTime}`);
-      const endDateTime = new Date(startDateTime.getTime() + parseInt(data.duration) * 60000);
+      const startDateTime = new Date(`${data.date}T${startTime24}`);
+      const endDateTime = new Date(`${data.date}T${endTime24}`);
       
+      if (endDateTime <= startDateTime) {
+        setAvailability({ available: false, error: 'End time must be after start time' });
+        return;
+      }
+
       const response = await api.get('/bookings/check-availability', {
         params: {
-          resource_id: resource.id,
+          resource_id: targetId,
           start_time: startDateTime.toISOString(),
           end_time: endDateTime.toISOString()
         }
       });
       setAvailability(response.data);
-    } catch (err) {
+    } catch {
       console.error('Availability check failed');
     } finally {
       setIsChecking(false);
     }
-  }, [resource.id]);
+  }, [selectedResourceId]);
+
+  useEffect(() => {
+    if (!resource) {
+      const fetchAll = async () => {
+        setIsFetchingResources(true);
+        try {
+          const res = await api.get('/resources?limit=100');
+          setAllResources(res.data.resources);
+          if (res.data.resources.length > 0 && !selectedResourceId) {
+            setSelectedResourceId(res.data.resources[0].id);
+          }
+        } catch (e) { console.error(e); }
+        setIsFetchingResources(false);
+      };
+      fetchAll();
+    }
+  }, [resource]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      checkAvailability(formData);
+      checkAvailability(formData, selectedResourceId);
     }, 500);
     return () => clearTimeout(timer);
-  }, [formData.date, formData.startTime, formData.duration, checkAvailability]);
+  }, [formData, selectedResourceId, checkAvailability]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -79,11 +128,27 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
 
     setIsLoading(true);
 
-    const startDateTime = new Date(`${formData.date}T${formData.startTime}`);
-    const endDateTime = new Date(startDateTime.getTime() + parseInt(formData.duration) * 60000);
+    const startTime24 = to24h(formData.startHour, formData.startMinute, formData.startPeriod);
+    const endTime24 = to24h(formData.endHour, formData.endMinute, formData.endPeriod);
+
+    const startDateTime = new Date(`${formData.date}T${startTime24}`);
+    const endDateTime = new Date(`${formData.date}T${endTime24}`);
+
+    if (endDateTime <= startDateTime) {
+      setErrors({ endTime: 'End time must be after start time' });
+      setIsLoading(false);
+      return;
+    }
+
+    const targetId = resource?.id || selectedResourceId;
+    if (!targetId) {
+      toast.error('Please select a resource');
+      setIsLoading(false);
+      return;
+    }
 
     const bookingData = {
-      resource_id: resource.id,
+      resource_id: targetId,
       start_time: startDateTime.toISOString(),
       end_time: endDateTime.toISOString(),
       meeting_title: formData.meeting_title,
@@ -114,13 +179,38 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
         <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-          <h2 className="text-xl font-bold text-gray-900">Book {resource.name}</h2>
+          <h2 className="text-xl font-bold text-gray-900">
+            {resource ? `Book ${resource.name}` : 'New Booking'}
+          </h2>
           <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-lg transition-colors">
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {!resource && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Select Resource</label>
+              <div className="relative">
+                {isFetchingResources ? (
+                   <div className="flex items-center gap-2 text-xs text-brand-lavender p-3 bg-gray-50 rounded-xl">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Loading resources...
+                   </div>
+                ) : (
+                  <select 
+                    className="input-field appearance-none cursor-pointer"
+                    value={selectedResourceId}
+                    onChange={(e) => setSelectedResourceId(e.target.value)}
+                  >
+                    <option value="" disabled>Choose a room or asset...</option>
+                    {allResources.map(res => (
+                      <option key={res.id} value={res.id}>{res.name} ({res.location})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          )}
           {error && (
             <div className="bg-red-50 border border-red-100 text-red-700 p-4 rounded-xl text-sm flex gap-3">
               <AlertCircle className="w-5 h-5 shrink-0" />
@@ -169,51 +259,95 @@ const BookingForm = ({ resource, onClose, onSuccess }) => {
             {errors.meeting_title && <p className="text-xs text-red-500 mt-1">{errors.meeting_title}</p>}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
-                <Calendar className="w-3 h-3" /> Date
-              </label>
-              <input 
-                required
-                type="date" 
-                min={new Date().toISOString().split('T')[0]}
-                className={`input-field ${errors.date ? 'border-red-500' : ''}`}
-                value={formData.date}
-                onChange={(e) => setFormData({...formData, date: e.target.value})}
-              />
-              {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
-            </div>
-            <div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+              <Calendar className="w-3 h-3" /> Date
+            </label>
+            <input 
+              required
+              type="date" 
+              min={new Date().toISOString().split('T')[0]}
+              className={`input-field ${errors.date ? 'border-red-500' : ''}`}
+              value={formData.date}
+              onChange={(e) => setFormData({...formData, date: e.target.value})}
+            />
+            {errors.date && <p className="text-xs text-red-500 mt-1">{errors.date}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Start Time
               </label>
-              <input 
-                required
-                type="time" 
-                step="1800"
-                className={`input-field ${errors.startTime ? 'border-red-500' : ''}`}
-                value={formData.startTime}
-                onChange={(e) => setFormData({...formData, startTime: e.target.value})}
-              />
-              {errors.startTime && <p className="text-xs text-red-500 mt-1">{errors.startTime}</p>}
+              <div className="flex items-center gap-2">
+                <select 
+                  className="flex-grow bg-gray-50 border border-gray-100 rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-brand-blue/20 outline-none"
+                  value={formData.startHour}
+                  onChange={(e) => setFormData({ ...formData, startHour: e.target.value })}
+                >
+                  {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <span className="font-bold text-gray-300">:</span>
+                <select 
+                  className="flex-grow bg-gray-50 border border-gray-100 rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-brand-blue/20 outline-none"
+                  value={formData.startMinute}
+                  onChange={(e) => setFormData({ ...formData, startMinute: e.target.value })}
+                >
+                  {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <div className="flex bg-gray-50 border border-gray-100 rounded-xl p-0.5">
+                  {['AM', 'PM'].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, startPeriod: p })}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                        formData.startPeriod === p ? 'bg-brand-blue text-white shadow-sm' : 'text-brand-lavender hover:text-[#1B2559]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
-            <select 
-              className="input-field"
-              value={formData.duration}
-              onChange={(e) => setFormData({...formData, duration: e.target.value})}
-            >
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="45">45 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-              <option value="180">3 hours</option>
-            </select>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> End Time
+              </label>
+              <div className="flex items-center gap-2">
+                <select 
+                  className="flex-grow bg-gray-50 border border-gray-100 rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-brand-blue/20 outline-none"
+                  value={formData.endHour}
+                  onChange={(e) => setFormData({ ...formData, endHour: e.target.value })}
+                >
+                  {hours.map(h => <option key={h} value={h}>{h}</option>)}
+                </select>
+                <span className="font-bold text-gray-300">:</span>
+                <select 
+                  className="flex-grow bg-gray-50 border border-gray-100 rounded-xl py-2 px-3 text-sm font-bold focus:ring-2 focus:ring-brand-blue/20 outline-none"
+                  value={formData.endMinute}
+                  onChange={(e) => setFormData({ ...formData, endMinute: e.target.value })}
+                >
+                  {minutes.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+                <div className="flex bg-gray-50 border border-gray-100 rounded-xl p-0.5">
+                  {['AM', 'PM'].map(p => (
+                    <button
+                      key={p}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, endPeriod: p })}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${
+                        formData.endPeriod === p ? 'bg-brand-blue text-white shadow-sm' : 'text-brand-lavender hover:text-[#1B2559]'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
           </div>
 
           <div className="space-y-2">

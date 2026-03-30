@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Login from './pages/auth/Login';
@@ -21,6 +21,17 @@ import ServerError from './pages/ServerError';
 import Analytics from './pages/Analytics';
 import Settings from './pages/Settings';
 import { Toaster } from 'react-hot-toast';
+
+// FIX: Bug #6 — Hard Page Reload on Axios 401 Breaks React State (Part B)
+const AuthInterceptor = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handler = () => navigate('/login');
+    window.addEventListener('auth:unauthorized', handler);
+    return () => window.removeEventListener('auth:unauthorized', handler);
+  }, [navigate]);
+  return null;
+};
 
 const ProtectedRoute = ({ children }) => {
   const { user } = useAuth();
@@ -44,7 +55,8 @@ function App() {
   return (
     <SocketProvider>
       <Router>
-        <Toaster 
+        <AuthInterceptor />
+        <Toaster  
         position="top-right" 
         toastOptions={{
           duration: 4000,
@@ -100,6 +112,7 @@ function App() {
           <Route path="resources" element={<Resources />} />
           <Route path="bookings" element={<Bookings />} />
           <Route path="bookings/:id" element={<BookingDetails />} />
+          <Route path="profile" element={<Profile />} />
           <Route 
             path="manage-resources" 
             element={
@@ -126,14 +139,6 @@ function App() {
           />
           <Route path="settings" element={<Settings />} />
         </Route>
-        <Route 
-          path="/profile" 
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
         <Route 
           path="/" 
           element={<AuthRedirect />} 

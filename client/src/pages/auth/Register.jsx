@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { UserPlus, Loader2, ShieldCheck, Globe, Zap, Mail, User, Lock, AlertCircle } from 'lucide-react';
+import { UserPlus, Loader2, ShieldCheck, Globe, Zap, Mail, User, Lock } from 'lucide-react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { z } from 'zod';

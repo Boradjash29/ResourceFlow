@@ -12,9 +12,6 @@ const transporter = nodemailer.createTransport({
 // Verify connection configuration on startup
 transporter.verify((error, success) => {
   if (error) {
-    console.error('❌ SMTP Connection Error:', error);
-  } else {
-    console.log('✅ SMTP Server is ready to take our messages');
   }
 });
 
@@ -189,6 +186,33 @@ export const sendBookingReminderEmail = async (email, userName, booking, resourc
           <p style="margin: 5px 0 0 0; color: #1b2559;">${new Date(booking.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
         </div>
         <p style="font-size: 14px; color: #666;">Location: ${resource.location || 'N/A'}</p>
+      </div>
+    `
+  };
+  return transporter.sendMail(mailOptions);
+};
+
+/**
+ * Sends a booking update email.
+ */
+export const sendBookingUpdateEmail = async (email, userName, booking, resource) => {
+  const mailOptions = {
+    from: `"ResourceFlow" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: `Booking Updated: ${booking.meeting_title}`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 30px; border: 1px solid #eee; border-radius: 16px;">
+        <h2 style="color: #4318FF;">Booking Updated ✏️</h2>
+        <p>Hi ${userName}, your booking for <strong>${resource.name}</strong> has been updated with new details.</p>
+        <div style="background: #f4f7fe; padding: 20px; border-radius: 12px; margin: 20px 0;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr><td style="padding: 5px 0; color: #666;">Resource:</td><td style="font-weight: bold;">${resource.name}</td></tr>
+            <tr><td style="padding: 5px 0; color: #666;">Meeting:</td><td style="font-weight: bold;">${booking.meeting_title}</td></tr>
+            <tr><td style="padding: 5px 0; color: #666;">New Date:</td><td style="font-weight: bold;">${new Date(booking.start_time).toLocaleDateString()}</td></tr>
+            <tr><td style="padding: 5px 0; color: #666;">New Time:</td><td style="font-weight: bold;">${new Date(booking.start_time).toLocaleTimeString()} - ${new Date(booking.end_time).toLocaleTimeString()}</td></tr>
+          </table>
+        </div>
+        <p style="font-size: 14px; color: #666;">Review the latest details in your <a href="${process.env.FRONTEND_URL}/dashboard/bookings">dashboard</a>.</p>
       </div>
     `
   };
