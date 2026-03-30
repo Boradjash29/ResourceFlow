@@ -1,0 +1,37 @@
+services:
+  - type: web
+    name: resourceflow-api
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npx prisma generate
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - fromDatabase:
+          name: resourceflow-db
+          property: connectionString
+        key: DATABASE_URL
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false # Set this to your Vercel URL after deployment
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: CACHE_THRESHOLD
+        value: "0.5"
+      - key: TOKEN_BUDGET
+        value: "4000"
+
+databases:
+  - name: resourceflow-db
+    plan: free # Change to starter/pro for pgvector persistence if needed
+    postgresMajorVersion: 15 # Ensure pgvector support
