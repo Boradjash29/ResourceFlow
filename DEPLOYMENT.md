@@ -3,31 +3,44 @@
 This guide walks you through deploying the ResourceFlow PERN stack to **Render** (Backend + Database) and **Vercel** (Frontend).
 
 ## 1. Prerequisites
-- A GitHub repository containing the latest codebase.
-- Accounts on [Render.com](https://render.com) and [Vercel.com](https://vercel.com).
-- An OpenAI (or Gemini) API key for the RAG engine.
+- A GitHub repository with your code.
+- Accounts on: [Supabase](https://supabase.com), [Render](https://render.com), and [Vercel](https://vercel.com).
+- API keys for OpenAI/Gemini.
 
 ---
 
-## 2. Deploy Backend & Database (Render)
+## 2. Deploy Database (Supabase) - "Forever Free"
 
-Render uses the included `render.yaml` to automatically provision everything.
+Render's free database expires after 90 days. For a permanent free database, use Supabase.
 
-1. Log in to **Render Dashboard**.
-2. Click **New +** > **Blueprint**.
-3. Connect your GitHub repository.
-4. Render will detect `render.yaml` and show:
-   - **resourceflow-db** (PostgreSQL Database)
-   - **resourceflow-api** (Node.js Web Service)
-5. **Configuration during setup:**
-   - Set `FRONTEND_URL` to your future Vercel URL (e.g., `https://resourceflow-client.vercel.app`).
-   - Provide your `EMAIL_USER`, `EMAIL_PASS`, and `OPENAI_API_KEY`.
-6. Click **Approve**.
-7. Once deployed, copy your Render service URL (e.g., `https://resourceflow-api.onrender.com`).
+1. Create a project on **Supabase**.
+2. Go to **Project Settings** > **Database**.
+3. Copy your **Connection String** (URI mode).
+4. **IMPORTANT:** Enable `pgvector` by running this in the Supabase SQL Editor:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
 
 ---
 
-## 3. Deploy Frontend (Vercel)
+## 3. Deploy Backend (Render)
+
+1. Click **New +** > **Web Service**.
+2. Connect your GitHub repo.
+3. **Settings:**
+   - **Name:** `resourceflow-api`
+   - **Root Directory:** `server`
+   - **Build Command:** `npm install && npx prisma generate`
+   - **Start Command:** `npm start`
+4. **Environment Variables:**
+   - `DATABASE_URL`: Paste your Supabase Connection String.
+   - `FRONTEND_URL`: Your Vercel URL (see step 4).
+   - `JWT_SECRET`, `JWT_REFRESH_SECRET`: (Random strings).
+   - `OPENAI_API_KEY`, `EMAIL_USER`, `EMAIL_PASS`.
+
+---
+
+## 4. Deploy Frontend (Vercel)
 
 Vercel is optimized for the React/Vite frontend.
 
